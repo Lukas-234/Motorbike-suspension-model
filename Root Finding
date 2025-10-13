@@ -1,6 +1,6 @@
 import math
 
-# Create a function to approximate pi using a certain number of N terms
+## Create a function to approximate pi using a certain number of N terms
 
 def approx_pi(N):
     
