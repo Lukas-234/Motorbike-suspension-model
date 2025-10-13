@@ -1,1 +1,23 @@
+import math
 
+# Create a function to approximate pi using a certain number of N terms
+
+def approx_pi(N):
+    
+    # start sum at 0
+    # iterate i from 1 to N + 1 and adding
+    # i squared over 2 to each calculated term for N iterations
+    
+    sm = 0
+    
+    for i in range(1,N+1):
+        sm += 1/(i**2)
+    pi_approx= math.sqrt(6*sm)
+    
+    return pi_approx
+
+# Printing the approximations for 10,100 and 1000 terms 
+
+print("10 terms :",approx_pi(10))
+print("100 terms :",approx_pi(100))
+print("1000 terms :",approx_pi(1000))
