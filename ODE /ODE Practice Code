@@ -1,0 +1,41 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.integrate import solve_ivp
+#GENERAL EQUATION OF MOTION
+
+#Parameters
+m = 1
+c = 0.5
+k = 4
+
+#Equation of Motion
+def eom(t,y):
+    x, x_dot = y
+    x_ddot = -(c/m)*x_dot - (k/m)*x
+    return [x_dot,x_ddot]
+
+#Initial conditions: x(0)=1 m, x_dot(0)=0 m/s
+y0 = [1.0,0.0]
+
+#Time span for the solution
+t_span = (0,10)
+t_eval = np.linspace(t_span[0], t_span[1], 1000)
+
+#Solve the system
+sol = solve_ivp(eom, t_span, y0, t_eval=t_eval)
+
+#Extract displacement and velocity
+x = sol.y[0]
+x_dot = sol.y[1]
+
+#Plot results
+plt.figure(figsize=(8,5))
+plt.plot(sol.t, x, label='Displacement x(t)')
+plt.plot(sol.t, x_dot, label='Velocity x_dot(t)')
+plt.plot(sol.t, x_ddot, label='Acceleration x_ddot')
+plt.xlabel('Time [s]')
+plt.ylabel('Response')
+plt.title('Damped Free Vibration Response')
+plt.grid(True)
+plt.legend()
+plt.show()
