@@ -4,16 +4,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 
-# Perameters
+# Parameters
 m_s = 111 #kg mass acting on the rear of the bike (50.3%)
 m_u = 15 #kg mass of rear wheel and tire
 k_s = 90000 #N/m rear spring estimate striffness to be changed later by root finding
 k_t = 90000 #N/m rear tire stiffness
 alpha = 0.1 #10% variation due to environmental changes
 f = 1 #Hz frequency of variation of damping, allows for change every second
-x_r = 10
+
 
 t = np.linspace(0,60,1000)
+x_r = 10*np.sin((np.pi*t)/5)    #change later to match interpolation
 
 c0 = 2*(m_s*k_s)**0.5 #Ns/m
 
@@ -29,3 +30,6 @@ print(t,c(t))
 
 plt.plot(t,c(t))
 plt.show() #Shows damping coefficient over time
+
+plt.plot(t, x_r)
+plt.show()
