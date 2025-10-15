@@ -27,6 +27,7 @@ sol = solve_ivp(eom, t_span, y0, t_eval=t_eval)
 #Extract displacement and velocity
 x = sol.y[0]
 x_dot = sol.y[1]
+x_ddot = -(c/m)*x_dot - (k/m)*x
 
 #Plot results
 plt.figure(figsize=(8,5))
