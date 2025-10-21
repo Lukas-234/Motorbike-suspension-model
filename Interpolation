@@ -1,2 +1,54 @@
 interpolation
-paste here
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy import signal
+import pandas as pd
+
+def generate_road_profile(length=100, resolution=0.1):
+
+    distance = np.arange(0, length, resolution)
+    
+    # Smooth base road with gentle slopes
+    base_profile = 0.01 * np.sin(2 * np.pi * distance / 20)
+    
+    # Add random roughness (typical road texture)
+    roughness = 0.005 * np.random.normal(0, 1, len(distance))
+    
+    # Add specific features
+    features = np.zeros_like(distance)
+    
+    # Speed bump at 30m n 
+    bump_pos = 30
+    bump_width = 0.9
+    bump_mask = (distance > bump_pos) & (distance < bump_pos + bump_width)
+    features[bump_mask] = 0.065*0.5 * (1 - np.cos(2 * np.pi * (distance[bump_mask] - bump_pos) / bump_width))
+    # source for speedbump height https://www.oxfordplastics.com/en-gb/news-and-insights/product-focus/ultimate-guide-to-speed-bumps
+
+    
+    # Combine all components
+    road_height = base_profile + roughness + features
+    
+    return distance, road_height 
+
+# Generate and plot the road profile
+distance, elevation = generate_road_profile()
+
+plt.figure(figsize=(12, 4))
+plt.plot(distance, elevation * 1000)  # Convert to mm
+plt.xlabel('Distance (m)')
+plt.ylabel('Elevation (mm)')
+plt.title('Generated Longitudinal Road Profile')
+plt.grid(True)
+plt.show()
+
+
+# Save to CSV
+road_data = np.column_stack((distance, elevation))
+np.savetxt('road_profile.csv', road_data, delimiter=',', header='distance_m,elevation_m', comments='')
+
+df = pd.DataFrame(road_data)
+df.to_csv('file2.csv', header=False, index=False)
+
+data = pd.read_csv('file2.csv')
+data.head()
+print(data)
