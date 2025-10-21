@@ -1,14 +1,13 @@
-# Space for ODE code before inputting into main code frame 
-
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 
 # Parameters
 m_s = 111 #kg mass acting on the rear of the bike (50.3%)
-m_u = 15 #kg mass of rear wheel and tire
+m_u = 15 #kg mass of rear wheel and tyre
+m_d = 60 #kg mass of the driver to work out inertial force 
 k_s = 90000 #N/m rear spring estimate striffness to be changed later by root finding
-k_t = 90000 #N/m rear tire stiffness
+k_t = 90000 #N/m rear tyre stiffness
 alpha = 0.1 #10% variation due to environmental changes
 f = 1 #Hz frequency of variation of damping, allows for change every second
 
@@ -32,6 +31,34 @@ def eom(t, y):
     x_u_ddot = (1/m_u) * (c_t * (x_s_dot - x_u_dot) + k_s * (x_s - x_u) - k_t * (x_u - xr))
     return [x_s_dot, x_s_ddot, x_u_dot, x_u_ddot]
 
+#Intial Condtitions to be changed [x_s, x_s_dot, x_u, x_u_dot]
 y0 = [0, 0, 0, 0]
 
 sol = solve_ivp(eom, t_span, y0, t_eval=t_space)
+
+#Extract results 
+x_s, x_u = sol.y[0], sol.y[2]
+x_s_dot,  x_u_dot = sol.y[1], sol.y[3]
+x_rp = x_r(sol.t) #due to coding x(r) wrt time, remove later and replace with interpolation
+
+#Compute relative displacements
+suspension_deflection = x_s - x_u
+tyre_deflection = x_u - x_rp
+
+#Accelerations
+xr = x_r(t)
+c_t = c(t)
+x_s_ddot = (1/m_s) * (-c_t * (x_s_dot - x_u_dot) - k_s * (x_s - x_u))
+x_u_ddot = (1/m_u) * (c_t * (x_s_dot - x_u_dot) + k_s * (x_s - x_u) - k_t * (x_u - xr))
+
+#--Plot Results--
+plt.figure(figsize=(10, 6))
+plt.plot(sol.t, x_s*1000, label='Sprung mass (x_s) [mm]')
+plt.plot(sol.t, x_u*1000, label='Unsprung mass (x_u) [mm]')
+plt.plot(sol.t, x_rp*1000, label='Road Profile (x_r) [mm]')
+plt.title('Vertical Displacement with Time-Varying Damping')
+plt.xlabel('Time [s]')
+plt.ylabel('Displacement [mm]')
+plt.legend()
+plt.grid(True)
+plt.show()
