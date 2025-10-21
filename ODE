@@ -1,3 +1,7 @@
+# Space for ODE code before inputting into main code frame 
+
+# Space for ODE code before inputting into main code frame 
+
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
@@ -46,8 +50,8 @@ suspension_deflection = x_s - x_u
 tyre_deflection = x_u - x_rp
 
 #Accelerations
-xr = x_r(t)
-c_t = c(t)
+xr = x_r(sol.t)
+c_t = c(sol.t)
 x_s_ddot = (1/m_s) * (-c_t * (x_s_dot - x_u_dot) - k_s * (x_s - x_u))
 x_u_ddot = (1/m_u) * (c_t * (x_s_dot - x_u_dot) + k_s * (x_s - x_u) - k_t * (x_u - xr))
 
@@ -59,6 +63,17 @@ plt.plot(sol.t, x_rp*1000, label='Road Profile (x_r) [mm]')
 plt.title('Vertical Displacement with Time-Varying Damping')
 plt.xlabel('Time [s]')
 plt.ylabel('Displacement [mm]')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+plt.figure(figsize=(10, 6))
+plt.plot(sol.t, x_s_ddot, label='Sprung mass acceleration (x_s_ddot) [m/s^2]')
+plt.plot(sol.t, 0.6, label='Maximum upward comfortable acceleration')
+plt.plot(sol.t, -0.6, label='Maximum downward comfortable acceleration')
+plt.title('Vertical Acceleration of driver with Time-Varying Damping')
+plt.xlabel('Time [s]')
+plt.ylabel('Acceleration [m/s^2]')
 plt.legend()
 plt.grid(True)
 plt.show()
