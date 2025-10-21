@@ -1,7 +1,5 @@
 # Space for ODE code before inputting into main code frame 
 
-# Space for ODE code before inputting into main code frame 
-
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
@@ -20,7 +18,7 @@ t_span = (0, 60)
 t_space = np.linspace(t_span[0], t_span[1], 1000)
 
 def x_r(t):
-    return 0.1*np.sin((np.pi*t)/5)    #change later to match interpolation
+    return 0.01*np.sin((np.pi*t)/5)    #change later to match interpolation
 
 c0 = 2*(m_s*k_s)**0.5 #Ns/m
 
@@ -68,9 +66,19 @@ plt.grid(True)
 plt.show()
 
 plt.figure(figsize=(10, 6))
+plt.plot(sol.t, x_s*1000, label='Sprung mass (x_s) [mm]')
+plt.plot(sol.t, x_u*1000, label='Unsprung mass (x_u) [mm]')
+plt.title('Vertical Displacement with Time-Varying Damping')
+plt.xlabel('Time [s]')
+plt.ylabel('Displacement [mm]')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+plt.figure(figsize=(10, 6))
 plt.plot(sol.t, x_s_ddot, label='Sprung mass acceleration (x_s_ddot) [m/s^2]')
-plt.plot(sol.t, 0.6, label='Maximum upward comfortable acceleration')
-plt.plot(sol.t, -0.6, label='Maximum downward comfortable acceleration')
+plt.axhline(0.6, color='r', linestyle='--', label='Max upward comfortable acceleration')
+plt.axhline(-0.6, color='b', linestyle='--', label='Max downward comfortable acceleration')
 plt.title('Vertical Acceleration of driver with Time-Varying Damping')
 plt.xlabel('Time [s]')
 plt.ylabel('Acceleration [m/s^2]')
