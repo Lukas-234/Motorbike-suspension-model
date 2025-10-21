@@ -13,23 +13,25 @@ alpha = 0.1 #10% variation due to environmental changes
 f = 1 #Hz frequency of variation of damping, allows for change every second
 
 
-t = np.linspace(0,60,1000)
-x_r = 10*np.sin((np.pi*t)/5)    #change later to match interpolation
+t_span = (0, 60)
+t_space = np.linspace(t_span[0], t_span[1], 1000)
+
+def x_r(t):
+    return 0.1*np.sin((np.pi*t)/5)    #change later to match interpolation
 
 c0 = 2*(m_s*k_s)**0.5 #Ns/m
 
 def c(t):
     return c0 * (1 + alpha * np.sin(2 * np.pi * f * t))
-    
 
-print(c(0))
-print(c(0.25))
-print(c(0.75))
-print(t,c(t))
+def eom(t, y):
+    x_s, x_s_dot, x_u, x_u_dot = y 
+    xr = x_r(t)
+    c_t = c(t)
+    x_s_ddot = (1/m_s) * (-c_t * (x_s_dot - x_u_dot) - k_s * (x_s - x_u))
+    x_u_ddot = (1/m_u) * (c_t * (x_s_dot - x_u_dot) + k_s * (x_s - x_u) - k_t * (x_u - xr))
+    return [x_s_dot, x_s_ddot, x_u_dot, x_u_ddot]
 
+y0 = [0, 0, 0, 0]
 
-plt.plot(t,c(t))
-plt.show() #Shows damping coefficient over time
-
-plt.plot(t, x_r)
-plt.show()
+sol = solve_ivp(eom, t_span, y0, t_eval=t_space)
