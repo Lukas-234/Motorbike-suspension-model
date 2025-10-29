@@ -1,0 +1,108 @@
+import numpy as np
+from scipy.linalg import eigh, eig
+
+# ----- Given / constants -----
+m_s = 111.0
+m_u = 15.0
+k_t = 90_000.0
+
+f_target   = 3.0      # Hz target for lowest mode
+zeta_target = 0.90    # target damping ratio for lowest mode (0.7–1.0 typical)
+
+M = np.array([[m_s, 0.0],
+              [0.0, m_u]], dtype=float)
+
+def K_of(ks):
+    return np.array([[ ks,     -ks],
+                     [-ks, ks + k_t]], dtype=float)
+
+def C_of(c):
+    return np.array([[ c, -c],
+                     [-c,  c]], dtype=float)
+
+# ----- Residual 1: frequency match for lowest mode -----
+def f1(ks):
+    # generalized eigenproblem: K φ = ω^2 M φ
+    lam, _ = eigh(K_of(ks), M)        # lam = ω^2 (sorted ascending)
+    lam = np.maximum(lam, 0.0)
+    w = np.sqrt(lam)
+    f = w / (2*np.pi)
+    f_low = float(np.min(f))
+    return f_low - f_target
+
+# ----- Residual 2: damping ratio match for lowest mode -----
+def f2(ks, c):
+    # State matrix A = [[0, I],[ -M^{-1}K, -M^{-1}C ]]
+    K = K_of(ks); C = C_of(c)
+    Minv = np.linalg.inv(M)
+    Z = np.zeros_like(M); I = np.eye(2)
+    A = np.block([[Z,       I],
+                  [-Minv@K, -Minv@C]])
+    vals = eig(A, left=False, right=False)  # complex eigenvalues
+    # pick complex-conjugate pair with smallest positive imag => "lowest" mode
+    pairs = [(lam, np.real(lam), np.abs(np.imag(lam))) for lam in vals if np.imag(lam) > 1e-9]
+    if not pairs:
+        # overdamped (no oscillatory mode) -> return positive residual (too much damping)
+        return (0.0 - zeta_target)
+    lam, sigma, omega_d = sorted(pairs, key=lambda t: t[2])[0]
+    zeta = -sigma / np.sqrt(sigma**2 + omega_d**2)
+    return float(zeta - zeta_target)
+
+# ===== 2D root finding (Broyden "good" – small & robust) =====
+def broyden_solve(ks0, c0, tol=1e-3, max_iter=20):
+    # Work in positive domain (clip when evaluating)
+    x = np.array([ks0, c0], dtype=float)
+    def F(x):
+        ks = max(1e-6, float(x[0]))
+        c  = max(1e-6, float(x[1]))
+        return np.array([f1(ks), f2(ks, c)], dtype=float)
+
+    B = np.eye(2)
+    r = F(x)
+    for _ in range(max_iter):
+        # Solve B s = -r
+        try:
+            s = np.linalg.solve(B, -r)
+        except np.linalg.LinAlgError:
+            B = B + 1e-8*np.eye(2)
+            s = np.linalg.solve(B, -r)
+
+        # Simple backtracking
+        alpha = 1.0
+        rnorm0 = np.linalg.norm(r)
+        for _ in range(8):
+            x_try = x + alpha*s
+            r_try = F(x_try)
+            if np.linalg.norm(r_try) < rnorm0:
+                break
+            alpha *= 0.5
+        else:
+            # tiny jitter if stuck
+            x_try = x + 1e-2*np.random.randn(2)
+            r_try = F(x_try)
+
+        # Broyden "good" update
+        y = r_try - r
+        sTs = float(np.dot(s, s))
+        if sTs > 0:
+            B = B + np.outer((y - B @ s), s) / sTs
+
+        x, r = x_try, r_try
+        if np.linalg.norm(r) < tol:
+            break
+    ks_star = max(1e-6, float(x[0]))
+    c_star  = max(1e-6, float(x[1]))
+    return ks_star, c_star, r
+
+# ===== Run: pick sane initial guesses and solve =====
+# Start ks from your bounds midpoint; c from equivalent critical for that ks
+ks_guess = 0.5*(50_000.0 + 150_000.0)
+k_eq = (ks_guess * k_t) / (ks_guess + k_t)
+ccrit = 2.0*np.sqrt(m_s * k_eq)
+c_guess = ccrit * 0.9
+
+ks_star, c_star, res = broyden_solve(ks_guess, c_guess, tol=5e-3, max_iter=25)
+
+print(f"k_s  ≈ {ks_star:,.1f} N/m")
+print(f"c    ≈ {c_star:,.1f} N·s/m")
+print(f"residuals: [f_low - f_target, zeta - zeta_target] = [{res[0]:+.3e}, {res[1]:+.3e}]
