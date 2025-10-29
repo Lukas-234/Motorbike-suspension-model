@@ -1,0 +1,69 @@
+import pandas as pd
+import numpy as np
+import itertools
+import matplotlib.pyplot as plt
+
+# https://www.sciencing.com/convert-distances-degrees-meters-7858322/ source for converting lattitude to longitude
+#Compare with https://www.gpsvisualizer.com/elevation as it will give difference in meters
+
+# read the excel file with the data
+df = pd.read_excel(r"C:\Users\lukas\OneDrive\Desktop\Work\Third Year\computational methods\Group Project\Data\A701 Liberton road .xlsx")
+#Longitude = pd.read_excel(r"C:\Users\lukas\OneDrive\Desktop\Work\Third Year\computational methods\Group Project\Data\A701 Liberton road .xlsx", usecols="C")
+#Altitude = pd.read_excel(r"C:\Users\lukas\OneDrive\Desktop\Work\Third Year\computational methods\Group Project\Data\A701 Liberton road .xlsx", usecols="D")
+
+
+# Get all the data from the excel files
+Lattitude = df.iloc[:, 1].values
+Longitude = df.iloc[:, 2].values
+Altitude = df.iloc[:, 3].values
+print(Lattitude, Longitude, Altitude)
+
+# conversion from degrees to meters
+conversion = 111139
+Lattitude = np.array(Lattitude)*conversion
+Longitude = np.array(Longitude) * conversion
+
+lengthlist = len(Lattitude)
+lengthloop = lengthlist -1
+
+Latdifflist = []
+
+for i in range (0,lengthloop):
+    Latdiff = Lattitude[i] - Lattitude[i+1]
+    print(Latdiff)
+    Latdifflist.append(Latdiff**2)
+
+Latdifflistsq = np.array(Latdifflist)**2
+print(Latdifflistsq, "lattitude difference squared")
+
+
+Longdifflist = []
+
+for i in range (0,lengthloop):
+    Longdiff = Longitude[i] - Longitude[i+1]
+    print("longdiff",Longdiff)
+    Longdifflist.append(Longdiff)
+
+Longdifflistsq = np.array(Longdifflist)**2
+print(Longdifflistsq, "longitudinal difference squared")
+
+D2 = Longdifflistsq + Latdifflistsq
+
+print(D2, "Difference squared")
+D = np.array(D2)**0.5
+
+print (D, "difference in degrees")
+
+
+Dtotal = list(itertools.accumulate(D))
+print(Dtotal, "Distance total")
+
+
+#remove first altitude value
+Altitude = Altitude[1:]
+print(Altitude)
+plt.plot(Dtotal, Altitude)
+plt.xlabel("Distance along road")
+plt.ylabel("Altitude")
+plt.grid()
+plt.show()
