@@ -5,7 +5,6 @@ m_s = 111       # kg, sprung mass
 m_u = 15        # kg, unsprung mass
 m_d = 60        # kg, rider mass
 k_t = 90000     # N/m, tire stiffness
-alpha = 0.1     # 10% damping variation
 f = 1    
 
 k_s_lower=50000
