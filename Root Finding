@@ -1,65 +1,48 @@
-#dylan to review
 import numpy as np
-import matplotlib.pyplot as plt
-from scipy.integrate import solve_ivp
-from scipy.optimize import root_scalar
+from scipy.linalg import eigh
 
+m_s = 111       # kg, sprung mass
+m_u = 15        # kg, unsprung mass
+m_d = 60        # kg, rider mass
+k_t = 90000     # N/m, tire stiffness
+alpha = 0.1     # 10% damping variation
+f = 1    
 
-m_s = 111 #kg mass acting on the rear of the bike (50.3%)
-m_u = 15 #kg mass of rear wheel and tyre
-m_d = 60 #kg mass of the driver to work out inertial force 
-k_s = 90000 #N/m rear spring estimate striffness to be changed later by root finding
-k_t = 90000 #N/m rear tyre stiffness
-alpha = 0.1 #10% variation due to environmental changes
-f = 1 #Hz frequency of variation of damping, allows for change every second
-y0 = [0, 0, 0, 0]
+k_s_lower=50000
+k_s_higher=150000
+k_s=90000 #initial guess
+f_target=3 #Hz
+M=np.array([[m_s,0],[0, m_u]])
 
-t_span = (0, 60)
-t_space = np.linspace(t_span[0], t_span[1], 1000)
+#Create matrices
+def rf_func(k_s):
+    K=np.array([[k_s, -k_s], [-k_s, k_s +k_t]])
+    eigenvalues, eigenvectors =eigh(K, M)
 
+    omega_squared= eigenvalues
+    omega=np.sqrt(omega_squared)
+    freq=omega/(2*np.pi)
+    f_mode=np.min(freq)
+    return f_mode-f_target
 
-def x_r(t):
-    return 0.045*np.sin((np.pi*t)/5)  
-  #change later to match interpolation
-#changed amplitude of bumps to 0.45 as 0.01 was causing any vertical accleration past 0.6ms for large valies of k
-
-
-def run_simulation(k_s_value):
-#ODE code from millie and Kitty wrapped in this function but now root-finidng output ks can be put back into this
-    c0_value = 2 * np.sqrt(m_s * k_s_value) #initial damping coefficient changes based on k_s
-    def c(t):
-        return c0_value * (1 + alpha * np.sin(2 * np.pi * f * t)) #damping changes over time
+k_s_last, k_s_curr= k_s_lower, k_s_higher
+F_last, F_curr= rf_func(k_s_last), rf_func(k_s_curr)
+for i in range(50):
+    if abs(F_curr)<1e-5:
+        break
     
-    def eom(t, y):
-        x_s, x_s_dot, x_u, x_u_dot = y
-        xr = x_r(t)
-        c_t = c(t)
-        x_s_ddot = (1/m_s)*(-c_t*(x_s_dot - x_u_dot) - k_s_value*(x_s - x_u))
-        x_u_ddot = (1/m_u)*(c_t*(x_s_dot - x_u_dot) + k_s_value*(x_s - x_u) - k_t*(x_u - xr))
-        return [x_s_dot, x_s_ddot, x_u_dot, x_u_ddot]
+    safe_gd=F_curr-F_last
+    if abs(safe_gd)<1e-12:
+        safe_gd=np.sign(safe_gd)*1e-12
+    k_s_new=k_s_curr-F_curr*(k_s_curr-k_s_last)/(safe_gd)
     
-    sol = solve_ivp(eom, t_span, y0, t_eval=t_space) # ouptuts of ODE
-    return sol
+    if k_s_new <= 0:
+        k_s_new = 1e-3
+    
+    k_s_last, F_last= k_s_curr, F_curr
+    k_s_curr, F_curr=k_s_new, rf_func(k_s_new)
+    
+else:
+    print('NO CONVERGANCE')    
 
-def target_performance(k_s_value): #function that for a given k_s gives max acceleration 
-# that defines comfort of the rider # could change to rms acceleration instead of max
-    c0_value = 2 * np.sqrt(m_s * k_s_value) #inital damping coefiicient based on k_s
-    sol= run_simulation(k_s_value) #solves ODE
-    c_t = c0_value * (1 + alpha * np.sin(2 * np.pi * f * sol.t))
-    
-    x_s, x_u = sol.y[0], sol.y[2] 
-    x_s_dot,  x_u_dot = sol.y[1], sol.y[3] #calling ODE solutions 
-    
-    x_s_ddot = (1/m_s)*(-c_t*(x_s_dot - x_u_dot) - k_s_value*(x_s - x_u)) #computing x_s_ddot
-    a_max = np.max(np.abs(x_s_ddot))# max acceleration from max x_s_ddot
-    
-    return a_max-0.6 # target is 0.6 m/s^2 so what a_max-0.6=0
-
-res=root_scalar(target_performance, bracket=[50000,150000],method='bisect', xtol=100, maxiter=50) 
-# Bisection Method: finding best k_s to make a_max-0.6=0 #could change this
-# Start with an interval [50000, 15000] where the function changes sign (one end positive, one negative). 
-# Then it repeatedly splits the interval in half and keep the half that contains the sign change. 
-# This continues until root is found.
-#xtol and maiter basically decrease accuracy to less decimal places
-#so that the value of k is not given to loads of decimal places and takes less time
-print("Root and optimal sping stiffness found at k_s=", res.root, "N/m")
+print(k_s_curr)
