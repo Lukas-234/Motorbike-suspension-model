@@ -7,10 +7,7 @@ import matplotlib.pyplot as plt
 #Compare with https://www.gpsvisualizer.com/elevation as it will give difference in meters
 
 # read the excel file with the data
-df = pd.read_excel(r"C:\Users\lukas\OneDrive\Desktop\Work\Third Year\computational methods\Group Project\Data\A701 Liberton road .xlsx")
-#Longitude = pd.read_excel(r"C:\Users\lukas\OneDrive\Desktop\Work\Third Year\computational methods\Group Project\Data\A701 Liberton road .xlsx", usecols="C")
-#Altitude = pd.read_excel(r"C:\Users\lukas\OneDrive\Desktop\Work\Third Year\computational methods\Group Project\Data\A701 Liberton road .xlsx", usecols="D")
-
+df = pd.read_excel(r"download the file in the github and copy the path here") #download the file in the github and copy the path here
 
 # Get all the data from the excel files
 Lattitude = df.iloc[:, 1].values
@@ -59,7 +56,7 @@ Dtotal = list(itertools.accumulate(D))
 print(Dtotal, "Distance total")
 
 
-#remove first altitude value
+#remove first altitude value to match the length of the lists
 Altitude = Altitude[1:]
 print(Altitude)
 plt.plot(Dtotal, Altitude)
