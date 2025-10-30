@@ -5,9 +5,9 @@ import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 
 # Parameters
-m_s = 108.286125 #kg mass acting on the rear of the bike (61.5%)
+m_s = 114.436125 #kg mass acting on the rear of the bike (61.5%)
 m_u = 15 #kg mass of rear wheel and tyre
-m_d = 70 #kg mass of the driver to work out inertial force 
+m_d = 80 #kg mass of the driver to work out inertial force 
 k_s = 90000 #N/m rear spring estimate striffness to be changed later by root finding
 k_t = 90000 #N/m rear tyre stiffness
 alpha = 0.1 #10% variation due to environmental changes
