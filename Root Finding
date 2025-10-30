@@ -1,47 +1,81 @@
 import numpy as np
-from scipy.linalg import eigh
 
-m_s = 111       # kg, sprung mass
-m_u = 15        # kg, unsprung mass
-m_d = 60        # kg, rider mass
-k_t = 90000     # N/m, tire stiffness
-f = 1    
+# --- constants (rear 1-DOF) ---
+m_s = 181.0          # sprung mass [kg]
+k_t = 90_000.0       # tyre stiffness [N/m]
 
-k_s_lower=50000
-k_s_higher=150000
-k_s=90000 #initial guess
-f_target=3 #Hz
-M=np.array([[m_s,0],[0, m_u]])
+f_target    = 2.5   # Hz: target ride frequency (for tuning k_s)
+zeta_target = 0.90   # optional: target damping ratio (to show root-find on c)
 
-#Create matrices
-def rf_func(k_s):
-    K=np.array([[k_s, -k_s], [-k_s, k_s +k_t]])
-    eigenvalues, eigenvectors =eigh(K, M)
+# --- equivalent stiffness and frequency ---
+def k_eq(ks):
+    # series combination of k_s and k_t
+    return (ks * k_t) / (ks + k_t)
 
-    omega_squared= eigenvalues
-    omega=np.sqrt(omega_squared)
-    freq=omega/(2*np.pi)
-    f_mode=np.min(freq)
-    return f_mode-f_target
+def f_low(ks):
+    # lowest natural frequency for 1-DOF
+    if ks <= 0: return -1e9
+    return (1.0/(2*np.pi)) * np.sqrt(k_eq(ks)/m_s)
 
-k_s_last, k_s_curr= k_s_lower, k_s_higher
-F_last, F_curr= rf_func(k_s_last), rf_func(k_s_curr)
-for i in range(50):
-    if abs(F_curr)<1e-5:
-        break
-    
-    safe_gd=F_curr-F_last
-    if abs(safe_gd)<1e-12:
-        safe_gd=np.sign(safe_gd)*1e-12
-    k_s_new=k_s_curr-F_curr*(k_s_curr-k_s_last)/(safe_gd)
-    
-    if k_s_new <= 0:
-        k_s_new = 1e-3
-    
-    k_s_last, F_last= k_s_curr, F_curr
-    k_s_curr, F_curr=k_s_new, rf_func(k_s_new)
-    
-else:
-    print('NO CONVERGANCE')    
+# --- residuals ---
+def r1(ks):                 # hit target frequency
+    return f_low(ks) - f_target
 
-print(k_s_curr)
+def c_crit(ks):             # critical damping for the tuned 1-DOF
+    return 2.0*np.sqrt(m_s * k_eq(ks))
+
+def r2(c, ks_fixed):        # optional: hit target damping ratio
+    return (c / c_crit(ks_fixed)) - zeta_target
+
+# --- bisection (for ks) ---
+def bisection(f, a, b, tol=1e-4, itmax=60):
+    fa, fb = f(a), f(b)
+    if not np.isfinite(fa) or not np.isfinite(fb) or fa*fb > 0:
+        raise RuntimeError(f"Need sign change: f({a})={fa:.3g}, f({b})={fb:.3g}")
+    for _ in range(itmax):
+        m  = 0.5*(a+b)
+        fm = f(m)
+        if abs(fm) < tol or abs(b-a) < tol:
+            return m
+        if fa*fm < 0: b, fb = m, fm
+        else:         a, fa = m, fm
+    return 0.5*(a+b)
+
+# --- Newton (tiny, for c or ks if you want) ---
+def newton(f, x0, tol=1e-6, itmax=25):
+    x = float(x0)
+    for _ in range(itmax):
+        fx = f(x)
+        if abs(fx) < tol: return x
+        h  = 1e-6*max(1.0, abs(x))
+        dfx = (f(x+h)-f(x-h))/(2*h)
+        if dfx == 0 or not np.isfinite(dfx): break
+        x_new = x - fx/dfx
+        if abs(x_new - x) < tol: return x_new
+        x = x_new
+    return x
+
+# ================= run =================
+if __name__ == "__main__":
+    # 1) root-find k_s by bisection to hit f_target
+    ks_lo, ks_hi = 30_000.0, 300_000.0   # a broad, physical bracket
+    ks_star = bisection(r1, ks_lo, ks_hi, tol=1e-3)
+
+    # 2) compute critical damping at that k_s (transition point)
+    ccrit = c_crit(ks_star)
+
+    # (optional) 3) show root-finding for c to match a zeta_target
+    #    – this is trivial here (closed form), but we demonstrate Newton/bisection usage.
+    # closed-form answer: c_target = zeta_target * ccrit
+    c_target_closed = zeta_target * ccrit
+
+    # do it with Newton anyway (on r2)
+    c0 = ccrit  # sensible starting point
+    c_target_newton = newton(lambda c: r2(c, ks_star), c0, tol=1e-6)
+
+    print(f"k_s (bisection) = {ks_star:,.1f} N/m")
+    print(f"f_low(ks*)      = {f_low(ks_star):.3f} Hz (target {f_target:.3f} Hz)")
+    print(f"c_crit(ks*)     = {ccrit:,.1f} N·s/m  (oscillatory ↔ overdamped transition)")
+
+    print(f"c_target (closed-form, zeta={zeta_target:.2f}) = {c_target_closed:,.1f} N·s/m")
+    print(f"c_target (Newton on r2)                        = {c_target_newton:,.1f} N·s/m")
