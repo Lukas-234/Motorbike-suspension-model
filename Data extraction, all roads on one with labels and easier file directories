@@ -1,0 +1,389 @@
+import pandas as pd
+import numpy as np
+import itertools
+import matplotlib.pyplot as plt
+
+#velocity needed and plot x value as a function of time rather than meters
+
+# https://www.sciencing.com/convert-distances-degrees-meters-7858322/ source for converting lattitude to longitude
+#Compare with https://www.gpsvisualizer.com/elevation as it will give difference in meters
+
+# read the excel file with the data
+df = pd.read_excel("Cobbled Road Royal Mile.xlsx")
+
+#have a velocity
+velocity = 20 * 0.44704 # this is 20mph in m/s
+velocity = int(velocity)
+print(type(velocity)), "type of velocity"
+
+# Get all the data from the excel files
+Lattitude = df.iloc[:, 1].values
+Longitude = df.iloc[:, 2].values
+Altitude = df.iloc[:, 3].values
+#print(Lattitude, Longitude, Altitude)
+
+# conversion from degrees to meters
+conversion = 111139
+Lattitude = np.array(Lattitude)*conversion
+Longitude = np.array(Longitude) * conversion
+
+lengthlist = len(Lattitude)
+lengthloop = lengthlist -1
+
+Latdifflist = []
+
+for i in range (0,lengthloop):
+    Latdiff = Lattitude[i] - Lattitude[i+1]
+    print(Latdiff)
+    Latdifflist.append(Latdiff**2)
+
+Latdifflistsq = np.array(Latdifflist)**2
+#print(Latdifflistsq, "lattitude difference squared")
+
+
+Longdifflist = []
+
+for i in range (0,lengthloop):
+    Longdiff = Longitude[i] - Longitude[i+1]
+    print("longdiff",Longdiff)
+    Longdifflist.append(Longdiff)
+
+Longdifflistsq = np.array(Longdifflist)**2
+#print(Longdifflistsq, "longitudinal difference squared")
+
+D2 = Longdifflistsq + Latdifflistsq
+
+#print(D2, "Difference squared")
+D = np.array(D2)**0.5
+
+#print (D, "difference in meters")
+
+#To go from meters to seconds divide the meters by speed
+
+#Distance travelled
+Dtotal = np.array(list(itertools.accumulate(D)))
+
+#print(Dtotal, "Distance total")
+
+multiplier = 1/velocity
+
+Ttotal = []
+Ttotal = Dtotal *multiplier
+
+print(Ttotal, "time total")
+print(Dtotal, "distance total")
+
+
+#remove first altitude value
+Altitude = Altitude[1:]
+print(Altitude)
+plt.plot(Ttotal, Altitude)
+plt.title("Cobbled Road Royal Mile")
+plt.xlabel("Time (s)")
+plt.ylabel("Altitude")
+plt.grid()
+plt.show()
+
+# read the excel file with the data
+df = pd.read_excel("Redford Road (B Road).xlsx")
+
+#have a velocity
+velocity = 30 * 0.44704 # this is 30mph in m/s
+velocity = int(velocity)
+print(type(velocity)), "type of velocity"
+
+# Get all the data from the excel files
+Lattitude = df.iloc[:, 1].values
+Longitude = df.iloc[:, 2].values
+Altitude = df.iloc[:, 3].values
+#print(Lattitude, Longitude, Altitude)
+
+# conversion from degrees to meters
+conversion = 111139
+Lattitude = np.array(Lattitude)*conversion
+Longitude = np.array(Longitude) * conversion
+
+lengthlist = len(Lattitude)
+lengthloop = lengthlist -1
+
+Latdifflist = []
+
+for i in range (0,lengthloop):
+    Latdiff = Lattitude[i] - Lattitude[i+1]
+    print(Latdiff)
+    Latdifflist.append(Latdiff**2)
+
+Latdifflistsq = np.array(Latdifflist)**2
+#print(Latdifflistsq, "lattitude difference squared")
+
+
+Longdifflist = []
+
+for i in range (0,lengthloop):
+    Longdiff = Longitude[i] - Longitude[i+1]
+    print("longdiff",Longdiff)
+    Longdifflist.append(Longdiff)
+
+Longdifflistsq = np.array(Longdifflist)**2
+#print(Longdifflistsq, "longitudinal difference squared")
+
+D2 = Longdifflistsq + Latdifflistsq
+
+#print(D2, "Difference squared")
+D = np.array(D2)**0.5
+
+#print (D, "difference in meters")
+
+#To go from meters to seconds divide the meters by speed
+
+#Distance travelled
+Dtotal = np.array(list(itertools.accumulate(D)))
+
+#print(Dtotal, "Distance total")
+
+multiplier = 1/velocity
+
+Ttotal = []
+Ttotal = Dtotal *multiplier
+
+print(Ttotal, "time total")
+print(Dtotal, "distance total")
+
+
+#remove first altitude value
+Altitude = Altitude[1:]
+print(Altitude)
+plt.plot(Ttotal, Altitude)
+plt.title("Redford Road (B Road)")
+plt.xlabel("Time (s)")
+plt.ylabel("Altitude")
+plt.grid()
+plt.show()
+
+# read the excel file with the data
+df = pd.read_excel("Liberton Road (A Road).xlsx")
+
+#have a velocity
+velocity = 30 * 0.44704 # this is 30mph in m/s
+velocity = int(velocity)
+print(type(velocity)), "type of velocity"
+
+# Get all the data from the excel files
+Lattitude = df.iloc[:, 1].values
+Longitude = df.iloc[:, 2].values
+Altitude = df.iloc[:, 3].values
+#print(Lattitude, Longitude, Altitude)
+
+# conversion from degrees to meters
+conversion = 111139
+Lattitude = np.array(Lattitude)*conversion
+Longitude = np.array(Longitude) * conversion
+
+lengthlist = len(Lattitude)
+lengthloop = lengthlist -1
+
+Latdifflist = []
+
+for i in range (0,lengthloop):
+    Latdiff = Lattitude[i] - Lattitude[i+1]
+    print(Latdiff)
+    Latdifflist.append(Latdiff**2)
+
+Latdifflistsq = np.array(Latdifflist)**2
+#print(Latdifflistsq, "lattitude difference squared")
+
+
+Longdifflist = []
+
+for i in range (0,lengthloop):
+    Longdiff = Longitude[i] - Longitude[i+1]
+    print("longdiff",Longdiff)
+    Longdifflist.append(Longdiff)
+
+Longdifflistsq = np.array(Longdifflist)**2
+#print(Longdifflistsq, "longitudinal difference squared")
+
+D2 = Longdifflistsq + Latdifflistsq
+
+#print(D2, "Difference squared")
+D = np.array(D2)**0.5
+
+#print (D, "difference in meters")
+
+#To go from meters to seconds divide the meters by speed
+
+#Distance travelled
+Dtotal = np.array(list(itertools.accumulate(D)))
+
+#print(Dtotal, "Distance total")
+
+multiplier = 1/velocity
+
+Ttotal = []
+Ttotal = Dtotal *multiplier
+
+print(Ttotal, "time total")
+print(Dtotal, "distance total")
+
+
+#remove first altitude value
+Altitude = Altitude[1:]
+print(Altitude)
+plt.plot(Ttotal, Altitude)
+plt.title("Liberton Road (A Road)")
+plt.xlabel("Time (s)")
+plt.ylabel("Altitude")
+plt.grid()
+plt.show()
+
+# read the excel file with the data
+df = pd.read_excel("M8 To Glasgow.xlsx")
+
+#have a velocity
+velocity = 70 * 0.44704 # this is 70mph in m/s
+velocity = int(velocity)
+print(type(velocity)), "type of velocity"
+
+# Get all the data from the excel files
+Lattitude = df.iloc[:, 1].values
+Longitude = df.iloc[:, 2].values
+Altitude = df.iloc[:, 3].values
+#print(Lattitude, Longitude, Altitude)
+
+# conversion from degrees to meters
+conversion = 111139
+Lattitude = np.array(Lattitude)*conversion
+Longitude = np.array(Longitude) * conversion
+
+lengthlist = len(Lattitude)
+lengthloop = lengthlist -1
+
+Latdifflist = []
+
+for i in range (0,lengthloop):
+    Latdiff = Lattitude[i] - Lattitude[i+1]
+    print(Latdiff)
+    Latdifflist.append(Latdiff**2)
+
+Latdifflistsq = np.array(Latdifflist)**2
+#print(Latdifflistsq, "lattitude difference squared")
+
+
+Longdifflist = []
+
+for i in range (0,lengthloop):
+    Longdiff = Longitude[i] - Longitude[i+1]
+    print("longdiff",Longdiff)
+    Longdifflist.append(Longdiff)
+
+Longdifflistsq = np.array(Longdifflist)**2
+#print(Longdifflistsq, "longitudinal difference squared")
+
+D2 = Longdifflistsq + Latdifflistsq
+
+#print(D2, "Difference squared")
+D = np.array(D2)**0.5
+
+#print (D, "difference in meters")
+
+#To go from meters to seconds divide the meters by speed
+
+#Distance travelled
+Dtotal = np.array(list(itertools.accumulate(D)))
+
+#print(Dtotal, "Distance total")
+
+multiplier = 1/velocity
+
+Ttotal = []
+Ttotal = Dtotal *multiplier
+
+print(Ttotal, "time total")
+print(Dtotal, "distance total")
+
+
+#remove first altitude value
+Altitude = Altitude[1:]
+print(Altitude)
+plt.plot(Ttotal, Altitude)
+plt.title("M8 To Glasgow")
+plt.xlabel("Time (s)")
+plt.ylabel("Altitude")
+plt.grid()
+plt.show()
+
+# read the excel file with the data
+df = pd.read_excel("Pleasance Road (hilly).xlsx")
+
+#have a velocity
+velocity = 20 * 0.44704 # this is 20mph in m/s
+velocity = int(velocity)
+print(type(velocity)), "type of velocity"
+
+# Get all the data from the excel files
+Lattitude = df.iloc[:, 1].values
+Longitude = df.iloc[:, 2].values
+Altitude = df.iloc[:, 3].values
+#print(Lattitude, Longitude, Altitude)
+
+# conversion from degrees to meters
+conversion = 111139
+Lattitude = np.array(Lattitude)*conversion
+Longitude = np.array(Longitude) * conversion
+
+lengthlist = len(Lattitude)
+lengthloop = lengthlist -1
+
+Latdifflist = []
+
+for i in range (0,lengthloop):
+    Latdiff = Lattitude[i] - Lattitude[i+1]
+    print(Latdiff)
+    Latdifflist.append(Latdiff**2)
+
+Latdifflistsq = np.array(Latdifflist)**2
+#print(Latdifflistsq, "lattitude difference squared")
+
+
+Longdifflist = []
+
+for i in range (0,lengthloop):
+    Longdiff = Longitude[i] - Longitude[i+1]
+    print("longdiff",Longdiff)
+    Longdifflist.append(Longdiff)
+
+Longdifflistsq = np.array(Longdifflist)**2
+#print(Longdifflistsq, "longitudinal difference squared")
+
+D2 = Longdifflistsq + Latdifflistsq
+
+#print(D2, "Difference squared")
+D = np.array(D2)**0.5
+
+#print (D, "difference in meters")
+
+#To go from meters to seconds divide the meters by speed
+
+#Distance travelled
+Dtotal = np.array(list(itertools.accumulate(D)))
+
+#print(Dtotal, "Distance total")
+
+multiplier = 1/velocity
+
+Ttotal = []
+Ttotal = Dtotal *multiplier
+
+print(Ttotal, "time total")
+print(Dtotal, "distance total")
+
+
+#remove first altitude value
+Altitude = Altitude[1:]
+print(Altitude)
+plt.plot(Ttotal, Altitude)
+plt.title("Pleasance Road (hilly)")
+plt.xlabel("Time (s)")
+plt.ylabel("Altitude")
+plt.grid()
+plt.show()
