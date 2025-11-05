@@ -1,0 +1,60 @@
+import numpy as np
+from scipy.linalg import eigh
+from scipy.optimize import root_scalar, minimize_scalar
+
+m_s = 114.436125        # kg, sprung mass
+m_u = 15        # kg, unsprung mass
+m_d = 80        # kg, rider mass
+k_t = 90000     # N/m, tire stiffness
+alpha = 0.1     # 10% damping variation
+f = 1    
+
+c_lower=50
+c_upper=75000
+k_s_lower=50000
+k_s_higher=150000
+k_s=90000 #initial guess
+f_target=2.4 #Hz
+delta=0. #damping ratio
+
+
+def k_finder(f_target, m_s, m_u, m_d, k_t):
+    M=np.array([[m_s+m_d,0],[0, m_u]])
+     
+    def rf_func(k_s):
+        K=np.array([[k_s, -k_s], [-k_s, k_s +k_t]])
+        eigenvalues, eigenvectors =eigh(K, M)
+
+        omega_squared= eigenvalues
+        omega=np.sqrt(omega_squared)
+        freq=omega/(2*np.pi)
+        participations = np.abs(eigenvectors[0,:])  # sprung mass DOF is index 0
+        mode_index = np.argmax(participations)      # mode with largest sprung participation
+        f_mode = freq[mode_index]
+        return f_mode-f_target
+
+    k_s_last, k_s_curr= k_s_lower, k_s_higher
+    F_last, F_curr= rf_func(k_s_last), rf_func(k_s_curr)
+    for i in range(50):
+        if abs(F_curr/f_target) < 1e-3:
+            break
+    
+        safe_gd=F_curr-F_last
+        if abs(safe_gd)<1e-12:
+            safe_gd=np.sign(safe_gd)*1e-12
+        k_s_new=k_s_curr-F_curr*(k_s_curr-k_s_last)/(safe_gd)
+    
+        if k_s_new <= 0:
+            k_s_new = 1e-3
+    
+        k_s_last, F_last= k_s_curr, F_curr
+        k_s_curr, F_curr=k_s_new, rf_func(k_s_new)
+    
+    else:
+        print('NO CONVERGANCE')    
+    return k_s_curr
+k_s= k_finder(f_target, m_s, m_u, m_d, k_t)
+
+
+c_s=2*delta*np.sqrt(k_s*(m_s+m_d))
+print(k_s, c_s)
