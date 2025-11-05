@@ -84,13 +84,27 @@ x_lin = np.linspace(0.023, Tmax, 700)
 #remove first altitude value
 Altitude = Altitude[1:]
 
-#interpolate
-f_lin = interpolate.splrep(Ttotal, Altitude, s=0)
-Altitude_linear_interpolated = interpolate.splev(x_lin,f_lin , der = 0)
+#find the minimum of the altitudes:
+def get_min(Altitude):
+    res = Altitude[0]
+    for i in Altitude[1:]:
+        res = min(res, i)
+    return res
 
-print(Altitude)
-plt.plot(x_lin, Altitude_linear_interpolated, )
+min_altitude = get_min(Altitude)
+print(min_altitude, "min altitude")
+
+# subtract the minimum from all altitude values to get a displacement
+displacement = Altitude - min_altitude
+print(displacement)
+
+#interpolate
+f_lin = interpolate.splrep(Ttotal, displacement, s=0)
+displacement_spline_interpolated = interpolate.splev(x_lin,f_lin , der = 0)
+
+
+plt.plot(x_lin, displacement_spline_interpolated, )
 plt.xlabel("Time (s)")
-plt.ylabel("Altitude")
+plt.ylabel("Displacement")
 plt.grid()
 plt.show()
