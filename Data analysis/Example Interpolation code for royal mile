@@ -1,0 +1,55 @@
+import pandas as pd
+import numpy as np
+import itertools
+import matplotlib.pyplot as plt
+from scipy import interpolate
+
+# === Cobbled Road Royal Mile ===
+df = pd.read_excel("Cobbled Road Royal Mile.xlsx")
+
+# velocity in m/s
+velocity = 20 * 0.44704  
+
+# Extract data
+Latitude = df.iloc[:, 1].values
+Longitude = df.iloc[:, 2].values
+Altitude = df.iloc[:, 3].values
+
+# Convert degrees to meters
+conversion = 111139
+Latitude = np.array(Latitude) * conversion
+Longitude = np.array(Longitude) * conversion
+
+# Compute squared differences correctly
+Lat_diffs = np.diff(Latitude)
+Long_diffs = np.diff(Longitude)
+D2 = Lat_diffs**2 + Long_diffs**2
+D = np.sqrt(D2)
+
+# Cumulative distance (m)
+Dtotal = np.cumsum(D)
+
+# Time = distance / velocity
+Ttotal = Dtotal / velocity
+
+# Make x-values for smooth interpolation
+x_lin = np.linspace(Ttotal.min(), Ttotal.max(), 700)
+
+# Match dimensions: remove the first altitude
+Altitude = Altitude[1:]
+
+# Interpolation (set small smoothing for realistic curve)
+f_lin = interpolate.splrep(Ttotal, Altitude, s=5)
+Altitude_smooth = interpolate.splev(x_lin, f_lin, der=0)
+
+# === Plot ===
+plt.figure(figsize=(8, 4))
+plt.scatter(Ttotal, Altitude, s=10, color="red", label="Original data")
+plt.plot(x_lin, Altitude_smooth, color="blue", linewidth=2, label="Spline (smooth)")
+plt.title("Cobbled Road Royal Mile")
+plt.xlabel("Time (s)")
+plt.ylabel("Altitude (m)")
+plt.grid(True, linestyle="--", alpha=0.6)
+plt.legend()
+plt.tight_layout()
+plt.show()
