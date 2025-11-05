@@ -1,54 +1,96 @@
-interpolation
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy import signal
 import pandas as pd
+import numpy as np
+import itertools
+import matplotlib.pyplot as plt
+from scipy import interpolate
 
-def generate_road_profile(length=100, resolution=0.1):
+#velocity needed and plot x value as a function of time rather than meters
 
-    distance = np.arange(0, length, resolution)
-    
-    # Smooth base road with gentle slopes
-    base_profile = 0.01 * np.sin(2 * np.pi * distance / 20)
-    
-    # Add random roughness (typical road texture)
-    roughness = 0.005 * np.random.normal(0, 1, len(distance))
-    
-    # Add specific features
-    features = np.zeros_like(distance)
-    
-    # Speed bump at 30m n 
-    bump_pos = 30
-    bump_width = 0.9
-    bump_mask = (distance > bump_pos) & (distance < bump_pos + bump_width)
-    features[bump_mask] = 0.065*0.5 * (1 - np.cos(2 * np.pi * (distance[bump_mask] - bump_pos) / bump_width))
-    # source for speedbump height https://www.oxfordplastics.com/en-gb/news-and-insights/product-focus/ultimate-guide-to-speed-bumps
+# https://www.sciencing.com/convert-distances-degrees-meters-7858322/ source for converting lattitude to longitude
+#Compare with https://www.gpsvisualizer.com/elevation as it will give difference in meters
 
-    
-    # Combine all components
-    road_height = base_profile + roughness + features
-    
-    return distance, road_height 
+# read the excel file with the data
+df = pd.read_excel(r"C:\Users\lukas\OneDrive\Desktop\Work\Third Year\computational methods\Group Project\Data\Liberton Road (A Road).xlsx")
+#Longitude = pd.read_excel(r"C:\Users\lukas\OneDrive\Desktop\Work\Third Year\computational methods\Group Project\Data\A701 Liberton road .xlsx", usecols="C")
+#Altitude = pd.read_excel(r"C:\Users\lukas\OneDrive\Desktop\Work\Third Year\computational methods\Group Project\Data\A701 Liberton road .xlsx", usecols="D")
 
-# Generate and plot the road profile
-distance, elevation = generate_road_profile()
+#have a velocity
+velocity = 17.886 # this is 40mph in m/s
+velocity = int(velocity)
+print(type(velocity)), "type of velocity"
 
-plt.figure(figsize=(12, 4))
-plt.plot(distance, elevation * 1000)  # Convert to mm
-plt.xlabel('Distance (m)')
-plt.ylabel('Elevation (mm)')
-plt.title('Generated Longitudinal Road Profile')
-plt.grid(True)
+# Get all the data from the excel files
+Lattitude = df.iloc[:, 1].values
+Longitude = df.iloc[:, 2].values
+Altitude = df.iloc[:, 3].values
+#print(Lattitude, Longitude, Altitude)
+
+# conversion from degrees to meters
+conversion = 111139
+Lattitude = np.array(Lattitude)*conversion
+Longitude = np.array(Longitude) * conversion
+
+lengthlist = len(Lattitude)
+lengthloop = lengthlist -1
+
+Latdifflist = []
+
+for i in range (0,lengthloop):
+    Latdiff = Lattitude[i] - Lattitude[i+1]
+    #print(Latdiff)
+    Latdifflist.append(Latdiff**2)
+
+Latdifflistsq = np.array(Latdifflist)**2
+#print(Latdifflistsq, "lattitude difference squared")
+
+
+Longdifflist = []
+
+for i in range (0,lengthloop):
+    Longdiff = Longitude[i] - Longitude[i+1]
+    #print("longdiff",Longdiff)
+    Longdifflist.append(Longdiff)
+
+Longdifflistsq = np.array(Longdifflist)**2
+#print(Longdifflistsq, "longitudinal difference squared")
+
+D2 = Longdifflistsq + Latdifflistsq
+
+#print(D2, "Difference squared")
+D = np.array(D2)**0.5
+
+#print (D, "difference in meters")
+
+#To go from meters to seconds divide the meters by speed
+
+#Distance travelled
+Dtotal = np.array(list(itertools.accumulate(D)))
+
+#print(Dtotal, "Distance total")
+
+multiplier = 1/velocity
+
+Ttotal = []
+Ttotal = Dtotal *multiplier
+
+print(Ttotal, "time total")
+print(Dtotal, "distance total")
+print(len(Ttotal), "length of Ttotal")
+
+#make a new list of Ttotal to have a list of values to plot the interpolated altitude values
+Tmax = max(Ttotal)
+x_lin = np.linspace(0.023, Tmax, 700)
+
+#remove first altitude value
+Altitude = Altitude[1:]
+
+#interpolate
+f_lin = interpolate.splrep(Ttotal, Altitude, s=0)
+Altitude_linear_interpolated = interpolate.splev(x_lin,f_lin , der = 0)
+
+print(Altitude)
+plt.plot(x_lin, Altitude_linear_interpolated, )
+plt.xlabel("Time (s)")
+plt.ylabel("Altitude")
+plt.grid()
 plt.show()
-
-
-# Save to CSV
-road_data = np.column_stack((distance, elevation))
-np.savetxt('road_profile.csv', road_data, delimiter=',', header='distance_m,elevation_m', comments='')
-
-df = pd.DataFrame(road_data)
-df.to_csv('file2.csv', header=False, index=False)
-
-data = pd.read_csv('file2.csv')
-data.head()
-print(data)
