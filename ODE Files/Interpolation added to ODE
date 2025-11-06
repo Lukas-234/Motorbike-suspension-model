@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-import itertools
 import matplotlib.pyplot as plt
 from scipy import interpolate
 from scipy.integrate import solve_ivp
@@ -92,6 +91,17 @@ accels = np.array([eom(t, y) for t, y in zip(sol.t, sol.y.T)])
 x_s_ddot = accels[:, 1]
 x_u_ddot = accels[:, 3]
 
+t_start = 2.5  # seconds
+
+# Find the index where sol.t >= t_start
+idx_start = np.searchsorted(sol.t, t_start)
+
+# Slice time and corresponding data
+t_plot = sol.t[idx_start:]
+x_s_plot = x_s[idx_start:]
+x_s_ddot_plot = x_s_ddot[idx_start:]
+x_rp_plot = x_rp[idx_start:]
+
 # === Plot ===
 plt.figure(figsize=(8, 4))
 plt.scatter(Ttotal, Altitude - Altitude[0], s=10, color="red", label="Original (normalized)")
@@ -104,34 +114,12 @@ plt.legend()
 plt.tight_layout()
 plt.show()
 
-t_start = 2.5  # seconds
-
-# Find the index where sol.t >= t_start
-idx_start = np.searchsorted(sol.t, t_start)
-
-# Slice time and corresponding data
-t_plot = sol.t[idx_start:]
-x_s_plot = x_s[idx_start:]
-x_s_ddot_plot = x_s_ddot[idx_start:]
-x_rp_plot = x_rp[idx_start:]
-
-# --- Plot displacement from t_start ---
-plt.figure(figsize=(10, 6))
-plt.plot(t_plot, x_s_plot * 1000, label='Sprung mass (x_s) [mm]')
-plt.plot(t_plot, x_rp_plot * 1000, label='Road Profile (x_r) [mm]')
-plt.title(f'Vertical Displacement from t = {t_start} s')
-plt.xlabel('Time [s]')
-plt.ylabel('Displacement [mm]')
-plt.legend()
-plt.grid(True)
-plt.show()
-
 # --- Plot acceleration from t_start ---
 plt.figure(figsize=(10, 6))
 plt.plot(t_plot, x_s_ddot_plot, label='Sprung mass acceleration [m/s²]')
 plt.axhline(0.6, color='r', linestyle='--', label='Max upward comfortable acceleration')
 plt.axhline(-0.6, color='b', linestyle='--', label='Max downward comfortable acceleration')
-plt.title(f'Sprung Mass Acceleration from t = {t_start} s')
+plt.title('Sprung Mass Acceleration on Cobbled Road Royal Mile')
 plt.xlabel('Time [s]')
 plt.ylabel('Acceleration [m/s²]')
 plt.legend()
