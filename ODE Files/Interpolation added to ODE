@@ -77,26 +77,14 @@ def eom(t, y):
     x_u_ddot = (1/m_u) * (c_t * (x_s_dot - x_u_dot) + k_s * (x_s - x_u) - k_t * (x_u - xr))
     return [x_s_dot, x_s_ddot, x_u_dot, x_u_ddot]
 
-# --- Quasi-steady initial conditions ---
-g = 9.81
-x_r0 = x_r(0)
-
-# Positions: steady-state balance
-x_u0 = x_r0 + (m_u * g) / k_t
-x_s0 = x_u0 + (m_s * g) / k_s
-
-# Velocities: match road motion
-x_u_dot0 = x_r_dot(0)
-x_s_dot0 = x_r_dot(0)
-
-# Initial state
-y0 = [x_s0, x_s_dot0, x_u0, x_u_dot0]
+#Intial Condtitions to be changed [x_s, x_s_dot, x_u, x_u_dot]
+y0 = [0, 0, 0, 0]
 
 sol = solve_ivp(eom, t_span, y0, method='RK45', t_eval=t_space)
 
 # Extract results
 x_s, x_s_dot, x_u, x_u_dot = sol.y
-x_rp = x_r_func(sol.t)
+x_rp = x_r(sol.t)
 
 # Compute accelerations directly from eom()
 # (This ensures they are derived from the same ODE, not rederived manually)
@@ -116,7 +104,7 @@ plt.legend()
 plt.tight_layout()
 plt.show()
 
-t_start = 1  # seconds
+t_start = 2.5  # seconds
 
 # Find the index where sol.t >= t_start
 idx_start = np.searchsorted(sol.t, t_start)
