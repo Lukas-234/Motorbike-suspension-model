@@ -5,6 +5,15 @@ import matplotlib.pyplot as plt
 from scipy import interpolate
 from scipy.integrate import solve_ivp
 
+# Parameters
+m_s = 114.436125 #kg mass acting on the rear of the bike (61.5%)
+m_u = 15 #kg mass of rear wheel and tyre
+m_d = 80 #kg mass of the driver to work out inertial force 
+k_s = 90000 #N/m rear spring estimate striffness to be changed later by root finding
+k_t = 90000 #N/m rear tyre stiffness
+alpha = 0.1 #10% variation due to environmental changes
+f = 1 #Hz frequency of variation of damping, allows for change every second
+
 # === Cobbled Road Royal Mile ===
 df = pd.read_excel("Cobbled Road Royal Mile.xlsx")
 
@@ -28,46 +37,28 @@ D2 = Lat_diffs**2 + Long_diffs**2
 D = np.sqrt(D2)
 
 # Cumulative distance (m)
-Dtotal = np.cumsum(D)
+Dtotal = np.concatenate(([0.0], np.cumsum(D)))
 
 # Time = distance / velocity
 Ttotal = Dtotal / velocity
 
-Altitude = Altitude[1:]
-
 # Make x-values for smooth interpolation
-x_lin = np.linspace(Ttotal.min(), Ttotal.max(), 700)
+x_lin = np.linspace(Ttotal[0], Ttotal[-1], 700)
 
 # Interpolation (set small smoothing for realistic curve)
 f_lin = interpolate.splrep(Ttotal, Altitude, s=10)
 Altitude_smooth = interpolate.splev(x_lin, f_lin, der=0)
 
+# Normalize road profile so it starts at 0 m
+Altitude_smooth -= Altitude_smooth[0]
+
 x_r_func = interpolate.interp1d(x_lin, Altitude_smooth, fill_value="extrapolate")
+
+x_r_dot0 = float(interpolate.splev(x_lin[0], f_lin, der=1))
+
 
 def x_r(t):
     return float(x_r_func(t))
-
-# === Plot ===
-plt.figure(figsize=(8, 4))
-plt.scatter(Ttotal, Altitude, s=10, color="red", label="Original data")
-plt.plot(x_lin, Altitude_smooth, color="blue", linewidth=2, label="Spline (smooth)")
-plt.title("Cobbled Road Royal Mile")
-plt.xlabel("Time (s)")
-plt.ylabel("Altitude (m)")
-plt.grid(True, linestyle="--", alpha=0.6)
-plt.legend()
-plt.tight_layout()
-plt.show()
-
-# Parameters
-m_s = 114.436125 #kg mass acting on the rear of the bike (61.5%)
-m_u = 15 #kg mass of rear wheel and tyre
-m_d = 80 #kg mass of the driver to work out inertial force 
-k_s = 90000 #N/m rear spring estimate striffness to be changed later by root finding
-k_t = 90000 #N/m rear tyre stiffness
-alpha = 0.1 #10% variation due to environmental changes
-f = 1 #Hz frequency of variation of damping, allows for change every second
-
 
 t_span = (0, x_lin.max())
 t_space = np.linspace(t_span[0], t_span[1], 1000)
@@ -85,8 +76,24 @@ def eom(t, y):
     x_u_ddot = (1/m_u) * (c_t * (x_s_dot - x_u_dot) + k_s * (x_s - x_u) - k_t * (x_u - xr))
     return [x_s_dot, x_s_ddot, x_u_dot, x_u_ddot]
 
-#Intial Condtitions to be changed [x_s, x_s_dot, x_u, x_u_dot]
-y0 = [0, 0, 0, 0]
+# --- optional: compute static deflections if you want positions to be equilibrium values ---
+g = 9.81
+x_s_eq = (m_s * g) / k_s               # sprung spring deflection due to gravity
+x_u_eq = x_s_eq + (m_u * g) / k_t      # tire + spring deflection (approx)
+
+# initial positions:
+# If you normalized the road so x_r(0)=0, set positions relative to that baseline:
+x_r0 = 0.0
+x_s0 = x_r0 + x_s_eq   # sprung mass sits x_s_eq above road baseline
+x_u0 = x_r0 + x_u_eq   # unsprung mass (wheel) sits x_u_eq above road baseline
+
+# initial vertical velocities: match road vertical velocity at t=0
+# you can set both sprung and unsprung to the road vertical velocity (bike moving with road)
+x_s_dot0 = x_r_dot0
+x_u_dot0 = x_r_dot0
+
+# initial state for solver
+y0 = [x_s0, x_s_dot0, x_u0, x_u_dot0]
 
 sol = solve_ivp(eom, t_span, y0, method='RK45', t_eval=t_space)
 
@@ -99,6 +106,18 @@ x_rp = x_r_func(sol.t)
 accels = np.array([eom(t, y) for t, y in zip(sol.t, sol.y.T)])
 x_s_ddot = accels[:, 1]
 x_u_ddot = accels[:, 3]
+
+# === Plot ===
+plt.figure(figsize=(8, 4))
+plt.scatter(Ttotal, Altitude - Altitude[0], s=10, color="red", label="Original (normalized)")
+plt.plot(x_lin, Altitude_smooth, color="blue", linewidth=2, label="Spline (normalized)")
+plt.title("Cobbled Road Royal Mile (zeroed at start)")
+plt.xlabel("Time (s)")
+plt.ylabel("Relative Displacement (m)")
+plt.grid(True, linestyle="--", alpha=0.6)
+plt.legend()
+plt.tight_layout()
+plt.show()
 
 # --- Plot Results ---
 plt.figure(figsize=(10, 6))
