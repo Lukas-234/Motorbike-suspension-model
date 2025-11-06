@@ -53,12 +53,13 @@ Altitude_smooth = interpolate.splev(x_lin, f_lin, der=0)
 Altitude_smooth -= Altitude_smooth[0]
 
 x_r_func = interpolate.interp1d(x_lin, Altitude_smooth, fill_value="extrapolate")
-
-x_r_dot0 = float(interpolate.splev(x_lin[0], f_lin, der=1))
-
+x_r_dot_func = interpolate.splev(x_lin, f_lin, der=1)
 
 def x_r(t):
-    return float(x_r_func(t))
+    return x_r_func(t)
+
+def x_r_dot(t):
+    return float(np.interp(t, x_lin, x_r_dot_func))
 
 t_span = (0, x_lin.max())
 t_space = np.linspace(t_span[0], t_span[1], 1000)
@@ -76,23 +77,19 @@ def eom(t, y):
     x_u_ddot = (1/m_u) * (c_t * (x_s_dot - x_u_dot) + k_s * (x_s - x_u) - k_t * (x_u - xr))
     return [x_s_dot, x_s_ddot, x_u_dot, x_u_ddot]
 
-# --- optional: compute static deflections if you want positions to be equilibrium values ---
+# --- Quasi-steady initial conditions ---
 g = 9.81
-x_s_eq = (m_s * g) / k_s               # sprung spring deflection due to gravity
-x_u_eq = x_s_eq + (m_u * g) / k_t      # tire + spring deflection (approx)
+x_r0 = x_r(0)
 
-# initial positions:
-# If you normalized the road so x_r(0)=0, set positions relative to that baseline:
-x_r0 = 0.0
-x_s0 = x_r0 + x_s_eq   # sprung mass sits x_s_eq above road baseline
-x_u0 = x_r0 + x_u_eq   # unsprung mass (wheel) sits x_u_eq above road baseline
+# Positions: steady-state balance
+x_u0 = x_r0 + (m_u * g) / k_t
+x_s0 = x_u0 + (m_s * g) / k_s
 
-# initial vertical velocities: match road vertical velocity at t=0
-# you can set both sprung and unsprung to the road vertical velocity (bike moving with road)
-x_s_dot0 = x_r_dot0
-x_u_dot0 = x_r_dot0
+# Velocities: match road motion
+x_u_dot0 = x_r_dot(0)
+x_s_dot0 = x_r_dot(0)
 
-# initial state for solver
+# Initial state
 y0 = [x_s0, x_s_dot0, x_u0, x_u_dot0]
 
 sol = solve_ivp(eom, t_span, y0, method='RK45', t_eval=t_space)
@@ -119,23 +116,34 @@ plt.legend()
 plt.tight_layout()
 plt.show()
 
-# --- Plot Results ---
+t_start = 1  # seconds
+
+# Find the index where sol.t >= t_start
+idx_start = np.searchsorted(sol.t, t_start)
+
+# Slice time and corresponding data
+t_plot = sol.t[idx_start:]
+x_s_plot = x_s[idx_start:]
+x_s_ddot_plot = x_s_ddot[idx_start:]
+x_rp_plot = x_rp[idx_start:]
+
+# --- Plot displacement from t_start ---
 plt.figure(figsize=(10, 6))
-plt.plot(sol.t, x_s * 1000, label='Sprung mass (x_s) [mm]')
-plt.plot(sol.t, x_u * 1000, label='Unsprung mass (x_u) [mm]')
-plt.plot(sol.t, x_rp * 1000, label='Road Profile (x_r) [mm]')
-plt.title('Vertical Displacement with Time-Varying Damping')
+plt.plot(t_plot, x_s_plot * 1000, label='Sprung mass (x_s) [mm]')
+plt.plot(t_plot, x_rp_plot * 1000, label='Road Profile (x_r) [mm]')
+plt.title(f'Vertical Displacement from t = {t_start} s')
 plt.xlabel('Time [s]')
 plt.ylabel('Displacement [mm]')
 plt.legend()
 plt.grid(True)
 plt.show()
 
+# --- Plot acceleration from t_start ---
 plt.figure(figsize=(10, 6))
-plt.plot(sol.t, x_s_ddot, label='Sprung mass acceleration [m/s²]')
+plt.plot(t_plot, x_s_ddot_plot, label='Sprung mass acceleration [m/s²]')
 plt.axhline(0.6, color='r', linestyle='--', label='Max upward comfortable acceleration')
 plt.axhline(-0.6, color='b', linestyle='--', label='Max downward comfortable acceleration')
-plt.title('Vertical Acceleration (from ODE solver)')
+plt.title(f'Sprung Mass Acceleration from t = {t_start} s')
 plt.xlabel('Time [s]')
 plt.ylabel('Acceleration [m/s²]')
 plt.legend()
