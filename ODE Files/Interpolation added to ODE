@@ -1,0 +1,124 @@
+import pandas as pd
+import numpy as np
+import itertools
+import matplotlib.pyplot as plt
+from scipy import interpolate
+from scipy.integrate import solve_ivp
+
+# === Cobbled Road Royal Mile ===
+df = pd.read_excel("Cobbled Road Royal Mile.xlsx")
+
+# velocity in m/s
+velocity = 20 * 0.44704  
+
+# Extract data
+Latitude = df.iloc[:, 1].values
+Longitude = df.iloc[:, 2].values
+Altitude = df.iloc[:, 3].values
+
+# Convert degrees to meters
+conversion = 111139
+Latitude = np.array(Latitude) * conversion
+Longitude = np.array(Longitude) * conversion
+
+# Compute squared differences correctly
+Lat_diffs = np.diff(Latitude)
+Long_diffs = np.diff(Longitude)
+D2 = Lat_diffs**2 + Long_diffs**2
+D = np.sqrt(D2)
+
+# Cumulative distance (m)
+Dtotal = np.cumsum(D)
+
+# Time = distance / velocity
+Ttotal = Dtotal / velocity
+
+Altitude = Altitude[1:]
+
+# Make x-values for smooth interpolation
+x_lin = np.linspace(Ttotal.min(), Ttotal.max(), 700)
+
+# Interpolation (set small smoothing for realistic curve)
+f_lin = interpolate.splrep(Ttotal, Altitude, s=10)
+Altitude_smooth = interpolate.splev(x_lin, f_lin, der=0)
+
+x_r_func = interpolate.interp1d(x_lin, Altitude_smooth, fill_value="extrapolate")
+
+def x_r(t):
+    return float(x_r_func(t))
+
+# === Plot ===
+plt.figure(figsize=(8, 4))
+plt.scatter(Ttotal, Altitude, s=10, color="red", label="Original data")
+plt.plot(x_lin, Altitude_smooth, color="blue", linewidth=2, label="Spline (smooth)")
+plt.title("Cobbled Road Royal Mile")
+plt.xlabel("Time (s)")
+plt.ylabel("Altitude (m)")
+plt.grid(True, linestyle="--", alpha=0.6)
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+# Parameters
+m_s = 114.436125 #kg mass acting on the rear of the bike (61.5%)
+m_u = 15 #kg mass of rear wheel and tyre
+m_d = 80 #kg mass of the driver to work out inertial force 
+k_s = 90000 #N/m rear spring estimate striffness to be changed later by root finding
+k_t = 90000 #N/m rear tyre stiffness
+alpha = 0.1 #10% variation due to environmental changes
+f = 1 #Hz frequency of variation of damping, allows for change every second
+
+
+t_span = (0, x_lin.max())
+t_space = np.linspace(t_span[0], t_span[1], 1000)
+
+c0 = 2*(m_s*k_s)**0.5 #Ns/m
+
+def c(t):
+    return c0 * (1 + alpha * np.sin(2 * np.pi * f * t))
+
+def eom(t, y):
+    x_s, x_s_dot, x_u, x_u_dot = y 
+    xr = x_r(t)
+    c_t = c(t)
+    x_s_ddot = (1/m_s) * (-c_t * (x_s_dot - x_u_dot) - k_s * (x_s - x_u))
+    x_u_ddot = (1/m_u) * (c_t * (x_s_dot - x_u_dot) + k_s * (x_s - x_u) - k_t * (x_u - xr))
+    return [x_s_dot, x_s_ddot, x_u_dot, x_u_ddot]
+
+#Intial Condtitions to be changed [x_s, x_s_dot, x_u, x_u_dot]
+y0 = [0, 0, 0, 0]
+
+sol = solve_ivp(eom, t_span, y0, method='RK45', t_eval=t_space)
+
+# Extract results
+x_s, x_s_dot, x_u, x_u_dot = sol.y
+x_rp = x_r_func(sol.t)
+
+# Compute accelerations directly from eom()
+# (This ensures they are derived from the same ODE, not rederived manually)
+accels = np.array([eom(t, y) for t, y in zip(sol.t, sol.y.T)])
+x_s_ddot = accels[:, 1]
+x_u_ddot = accels[:, 3]
+
+# --- Plot Results ---
+plt.figure(figsize=(10, 6))
+plt.plot(sol.t, x_s * 1000, label='Sprung mass (x_s) [mm]')
+plt.plot(sol.t, x_u * 1000, label='Unsprung mass (x_u) [mm]')
+plt.plot(sol.t, x_rp * 1000, label='Road Profile (x_r) [mm]')
+plt.title('Vertical Displacement with Time-Varying Damping')
+plt.xlabel('Time [s]')
+plt.ylabel('Displacement [mm]')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+plt.figure(figsize=(10, 6))
+plt.plot(sol.t, x_s_ddot, label='Sprung mass acceleration [m/s²]')
+plt.axhline(0.6, color='r', linestyle='--', label='Max upward comfortable acceleration')
+plt.axhline(-0.6, color='b', linestyle='--', label='Max downward comfortable acceleration')
+plt.title('Vertical Acceleration (from ODE solver)')
+plt.xlabel('Time [s]')
+plt.ylabel('Acceleration [m/s²]')
+plt.legend()
+plt.grid(True)
+plt.show()
