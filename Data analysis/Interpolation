@@ -99,7 +99,7 @@ displacement = Altitude - min_altitude
 print(displacement)
 
 #interpolate
-f_lin = interpolate.splrep(Ttotal, displacement, s=0)
+f_lin = interpolate.splrep(Ttotal, displacement, s=5)
 displacement_spline_interpolated = interpolate.splev(x_lin,f_lin , der = 0)
 
 
