@@ -1,60 +1,174 @@
 import numpy as np
 from scipy.linalg import eigh
-from scipy.optimize import root_scalar, minimize_scalar
+import matplotlib.pyplot as plt
 
-m_s = 114.436125        # kg, sprung mass
-m_u = 15        # kg, unsprung mass
+# System parameters
+m_s = 63      # kg, sprung mass (rear portion of scooter)
+m_u = 15        # kg, unsprung mass (wheel, swing arm)
 m_d = 80        # kg, rider mass
-k_t = 90000     # N/m, tire stiffness
-alpha = 0.1     # 10% damping variation
-f = 1    
-
-c_lower=50
-c_upper=75000
-k_s_lower=50000
-k_s_higher=150000
-k_s=90000 #initial guess
-f_target=2.4 #Hz
-delta=0. #damping ratio
+k_t = 100000    # N/m, tire stiffness
 
 
-def k_finder(f_target, m_s, m_u, m_d, k_t):
-    M=np.array([[m_s+m_d,0],[0, m_u]])
-     
-    def rf_func(k_s):
-        K=np.array([[k_s, -k_s], [-k_s, k_s +k_t]])
-        eigenvalues, eigenvectors =eigh(K, M)
+# Design target: place natural frequency above sensitive range
+f_target = 1  # Hz
+delta_target=0.3 #for max comfort industry standard
 
-        omega_squared= eigenvalues
-        omega=np.sqrt(omega_squared)
-        freq=omega/(2*np.pi)
-        participations = np.abs(eigenvectors[0,:])  # sprung mass DOF is index 0
-        mode_index = np.argmax(participations)      # mode with largest sprung participation
-        f_mode = freq[mode_index]
-        return f_mode-f_target
+# Mass matrix
+M = np.array([[m_s + m_d, 0], 
+              [0, m_u]])
 
-    k_s_last, k_s_curr= k_s_lower, k_s_higher
-    F_last, F_curr= rf_func(k_s_last), rf_func(k_s_curr)
-    for i in range(50):
-        if abs(F_curr/f_target) < 1e-3:
-            break
+# Initial guess for k_s bounds using single DOF approximation
+m_total = m_s + m_d
+k_estimate = (2 * np.pi * f_target)**2 * m_total
+k_s_lower = 0.5 * k_estimate
+k_s_higher = 2 * k_estimate
+
+# Objective function
+def rf_func(k_s):
+    """
+    Returns: actual_frequency - target_frequency
+    Root when this equals zero
+    """
+    K = np.array([[k_s, -k_s], 
+                  [-k_s, k_s + k_t]])
     
-        safe_gd=F_curr-F_last
-        if abs(safe_gd)<1e-12:
-            safe_gd=np.sign(safe_gd)*1e-12
-        k_s_new=k_s_curr-F_curr*(k_s_curr-k_s_last)/(safe_gd)
+    eigenvalues, eigenvectors = eigh(K, M)
+    omega_squared = eigenvalues
+    omega = np.sqrt(omega_squared)
+    freq = omega / (2 * np.pi)
+    participations = np.abs(eigenvectors[0,:])  # sprung mass DOF is index 0
+    mode_index = np.argmax(participations)      # mode with largest sprung participation
+    f_mode = freq[mode_index] # Sprung mass mode (lower frequency)
     
-        if k_s_new <= 0:
-            k_s_new = 1e-3
+    return f_mode - f_target
+
+# Secant method implementation
+k_s_last, k_s_curr = k_s_lower, k_s_higher
+F_last, F_curr = rf_func(k_s_last), rf_func(k_s_curr)
+
+max_iterations = 50
+tolerance = 1e-4  # Hz
+
+print(f"Initial bounds: k_s ∈ [{k_s_lower:.0f}, {k_s_higher:.0f}] N/m")
+print(f"Target frequency: {f_target} Hz Hz\n")
+
+for i in range(max_iterations):
+    # Check convergence
+    if abs(F_curr) < tolerance:
+        print(f"✓ Converged in {i+1} iterations")
+        break
     
-        k_s_last, F_last= k_s_curr, F_curr
-        k_s_curr, F_curr=k_s_new, rf_func(k_s_new)
+    # Secant method update
+    safe_gd = F_curr - F_last
+    if abs(safe_gd) < 1e-12:
+        safe_gd = np.sign(safe_gd) * 1e-12
     
-    else:
-        print('NO CONVERGANCE')    
-    return k_s_curr
-k_s= k_finder(f_target, m_s, m_u, m_d, k_t)
+    k_s_new = k_s_curr - F_curr * (k_s_curr - k_s_last) / safe_gd
+    
+    # Ensure positive stiffness
+    if k_s_new <= 0:
+        k_s_new = 1e-3
+    
+    # Update for next iteration
+    k_s_last, F_last = k_s_curr, F_curr
+    k_s_curr, F_curr = k_s_new, rf_func(k_s_new)
+    
+else:
+    print('✗ NO CONVERGENCE')
+    
+per_spring=k_s_curr*0.5
+k_s_opt=k_s_curr
+
+def rf_func2(k_s, c_s):
+    K = np.array([[k_s, -k_s],
+                  [-k_s, k_s + k_t]])
+    C = np.array([[c_s, -c_s],
+                  [-c_s, c_s]])
+    M_inv = np.linalg.inv(M)
+    
+    A = np.block([[np.zeros((2,2)), np.eye(2)],
+                  [-M_inv @ K, -M_inv @ C]])
+    eigvals, eigvecs = np.linalg.eig(A)
+
+# Oneigvals, eigvecs = np.linalg.eig(A)
+
+# Only positive imaginary part (oscillatory)
+    pos_idx = [i for i, lam in enumerate(eigvals) if np.imag(lam) > 1e-8]
+    eigvals = eigvals[pos_idx]
+    eigvecs = eigvecs[:, pos_idx]
+
+# Pick mode with largest sprung-mass participation
+    participations = [abs(eigvecs[0,i]) for i in range(len(eigvals))]
+    mode_index = np.argmax(participations)
+    lam_mode = eigvals[mode_index]
+
+    sigma = np.real(lam_mode)
+    omega_d = np.imag(lam_mode)
+    delta = -sigma / np.sqrt(sigma**2 + omega_d**2)
+    return delta
+def objective_func(c_s):
+    return rf_func2(k_s_opt, c_s)- delta_target
+    
+
+c_lower, c_upper = 500, 1500
 
 
-c_s=2*delta*np.sqrt(k_s*(m_s+m_d))
-print(k_s, c_s)
+c_last, c_curr = c_lower, c_upper
+F_last, F_curr = objective_func(c_last), objective_func(c_curr)
+
+max_step=500
+for i in range(50):
+    if abs(F_curr) < 1e-4:  # Tolerance on damping ratio
+        print(f"✓ Converged in {i+1} iterations")
+        break
+    
+    safe_gd = F_curr - F_last
+    if abs(safe_gd) < 1e-12:
+        safe_gd = np.sign(safe_gd) * 1e-12
+    
+    c_new = c_curr - F_curr * (c_curr - c_last) / safe_gd
+    step = c_new - c_curr
+    if abs(step) > max_step:
+        step = np.sign(step) * max_step
+    c_new = c_curr + step
+    
+   # Prevent unphysical or NaN values
+    if np.isnan(c_new) or np.isinf(c_new):
+        print("Warning: secant produced invalid c_s, stopping iteration")
+        break
+    
+    
+    c_last, F_last = c_curr, F_curr
+    c_curr, F_curr = c_new, objective_func(c_new)
+
+c_s_opt = c_curr
+c_s_per_damper = c_s_opt / 2  # Twin shocks
+
+c_s_range = np.linspace(10, 2000, 200)  # range of total damping
+delta_vals = [rf_func2(k_s_opt, c) for c in c_s_range]
+
+plt.figure(figsize=(8,5))
+plt.plot(c_s_range, delta_vals, label='Sprung-mass modal damping')
+plt.axhline(delta_target, color='red', linestyle='--', label=f'Target ζ = {delta_target}')
+plt.xlabel('Total damping c_s [N·s/m]')
+plt.ylabel('Modal damping ratio ζ')
+plt.title('Modal damping ratio vs Total damping')
+plt.grid(True)
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+print(f"\n{'='*60}")
+print(f"Target damping ratio: ζ = {delta_target}")
+print(f"Achieved damping ratio: ζ = {delta_target + F_curr:.4f}")
+print(f"Total damping: c_s = {c_s_opt:.1f} N·s/m")
+print(f"{'='*60}")
+    
+# Results
+print(f"\n{'='*50}")
+print(f"Optimal effective spring stiffness: k_s = {k_s_curr:.2f} N/m")
+print(f"Optimal per spring stiffness: k_s = {per_spring:.2f} N/m")
+print(f"Resulting frequency: {f_target + F_curr:.4f} Hz")
+print(f"Target frequency: {f_target:.4f} Hz")
+print(f"Final error: {abs(F_curr):.6f} Hz")
+print(f"{'='*50}")
