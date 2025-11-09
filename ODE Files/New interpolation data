@@ -1,0 +1,126 @@
+import pandas as pd
+import numpy as np
+import itertools
+import matplotlib.pyplot as plt
+from scipy import interpolate
+from itertools import groupby
+
+#velocity needed and plot x value as a function of time rather than meters
+
+# https://www.sciencing.com/convert-distances-degrees-meters-7858322/ source for converting lattitude to longitude
+#Compare with https://www.gpsvisualizer.com/elevation as it will give difference in meters
+
+# read the excel file with the data
+df = pd.read_excel(r"C:\Users\lukas\OneDrive\Desktop\Work\Third Year\computational methods\Group Project\Data\Liberton Road (A Road).xlsx")
+
+#have a velocity
+velocity = 40*0.44704 # 0.44704 is the multiplier from mph to m/s
+velocity = int(velocity)
+print(type(velocity)), "type of velocity"
+
+# Get all the data from the excel files
+Lattitude = df.iloc[:, 1].values
+Longitude = df.iloc[:, 2].values
+Altitude = df.iloc[:, 3].values
+
+# conversion from degrees to meters
+conversion = 111139
+Lattitude = np.array(Lattitude)*conversion
+Longitude = np.array(Longitude) * conversion
+
+lengthlist = len(Lattitude)
+lengthloop = lengthlist -1
+
+Latdifflist = []
+
+for i in range (0,lengthloop):
+    Latdiff = Lattitude[i] - Lattitude[i+1]
+    Latdifflist.append(Latdiff**2)
+
+Latdifflistsq = np.array(Latdifflist)**2
+
+Longdifflist = []
+
+for i in range (0,lengthloop):
+    Longdiff = Longitude[i] - Longitude[i+1]
+    Longdifflist.append(Longdiff)
+
+Longdifflistsq = np.array(Longdifflist)**2
+
+D2 = Longdifflistsq + Latdifflistsq
+
+D = np.array(D2)**0.5
+
+#To go from meters to seconds divide the meters by speed
+
+#Distance travelled
+Dtotal = np.array(list(itertools.accumulate(D)))
+
+
+multiplier = 1/velocity
+
+Ttotal = []
+Ttotal = Dtotal *multiplier
+
+print(Ttotal, "time total")
+print(Dtotal, "distance total")
+print(len(Ttotal), "length of Ttotal")
+
+
+#remove first altitude value to ensure the lengths of the lists match
+Altitude = Altitude[1:]
+
+#find the minimum of the altitudes:
+def get_min(Altitude):
+    res = Altitude[0]
+    for i in Altitude[1:]:
+        res = min(res, i)
+    return res
+
+min_altitude = get_min(Altitude)
+print(min_altitude, "min altitude")
+
+# subtract the minimum from all altitude values to get a displacement
+displacement = Altitude - min_altitude
+print(displacement)
+
+change_points = np.r_[True, displacement[1:] != displacement[:-1]]
+
+# Assign group IDs
+group_ids = np.cumsum(change_points)
+
+unique_groups, counts = np.unique(group_ids, return_counts=True)
+
+mask_list = []
+for gid, c in zip(unique_groups, counts):
+    val = displacement[group_ids == gid][0]
+    if val == 0:
+        # Keep all zeros
+        mask_list.append(np.ones(c, dtype=bool))
+    else:
+        # Keep first two from nonzero groups
+        mask_list.append(np.arange(c) < 1)
+
+mask = np.concatenate(mask_list)
+#Apply mask to both arrays
+new_displacement = displacement[mask]
+Ttotal_new = Ttotal[mask]
+
+print(new_displacement, "new dispalcement")
+print(Ttotal_new,"new total time")
+
+#make a new list of Ttotal to have a list of values to plot the interpolated altitude values
+#Tmax = max(Ttotal)
+x_lin = np.linspace(0.023, Ttotal, 7000)
+
+
+#interpolate
+f_lin = interpolate.splrep(Ttotal_new, new_displacement, s=0)
+displacement_spline_interpolated = interpolate.splev(x_lin,f_lin , der = 0)
+
+
+plt.plot(x_lin, displacement_spline_interpolated )
+plt.xlabel("Time (s)")
+plt.ylabel("Displacement")
+plt.grid()
+plt.show()
