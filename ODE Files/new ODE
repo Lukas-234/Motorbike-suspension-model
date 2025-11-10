@@ -1,3 +1,5 @@
+import os
+base_dir = os.path.dirname(os.path.abspath(__file__))
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -56,19 +58,22 @@ k_s = 90000
 k_t = 90000
 alpha = 0.1
 f = 1
+g = 9.81  # Gravity constant
 
 # === Roads and speeds ===
+# ### NEW ### Added 'spline_s' key for per-road smoothing
 roads = [
-    {"file": "Cobbled Road Royal Mile.xlsx", "name": "Cobbled Road Royal Mile", "velocity_mph": 20},
-    {"file": "Liberton Road (A Road).xlsx", "name": "Liberton Road (A Road)", "velocity_mph": 30},
-    {"file": "M8 To Glasgow.xlsx", "name": "M8 To Glasgow", "velocity_mph": 70},
-    {"file": "Pleasance Road (hilly).xlsx", "name": "Pleasance Road (hilly)", "velocity_mph": 20},
-    {"file": "Redford Road (B Road).xlsx", "name": "Redford Road (B Road)", "velocity_mph": 30},
+    {"file": os.path.join(base_dir, "Cobbled Road Royal Mile.xlsx"), "name": "Cobbled Road Royal Mile", "velocity_mph": 20, "spline_s": 0.5},
+    {"file": os.path.join(base_dir, "Liberton Road (A Road).xlsx"), "name": "Liberton Road (A Road)", "velocity_mph": 30, "spline_s": 1.0},
+    {"file": os.path.join(base_dir, "M8 To Glasgow.xlsx"), "name": "M8 To Glasgow", "velocity_mph": 70, "spline_s": 100.0},
+    {"file": os.path.join(base_dir, "Pleasance Road (hilly).xlsx"), "name": "Pleasance Road (hilly)", "velocity_mph": 20, "spline_s": 0.5},
+    {"file": os.path.join(base_dir, "Redford Road (B Road).xlsx"), "name": "Redford Road (B Road)", "velocity_mph": 30, "spline_s": 1.0},
 ]
 
 results = []
 
 for road in roads:
+    print(f"\nProcessing {road['name']}...")
     df = pd.read_excel(road["file"])
     velocity = road["velocity_mph"] * 0.44704
 
@@ -89,9 +94,15 @@ for road in roads:
     Ttotal = Dtotal / velocity
 
     x_lin = np.linspace(Ttotal[0], Ttotal[-1], 700)
-    f_lin = interpolate.splrep(Ttotal, Altitude, s=5)
+    
+    # ### NEW ### Use the per-road smoothing factor
+    smoothing_factor = road["spline_s"]
+    print(f"Using smoothing factor s={smoothing_factor}")
+    f_lin = interpolate.splrep(Ttotal, Altitude, s=smoothing_factor)
+    # ### END NEW ###
+    
     Altitude_smooth = interpolate.splev(x_lin, f_lin, der=0)
-    Altitude_smooth -= Altitude_smooth[0]
+    Altitude_smooth -= Altitude_smooth[0] # Normalize profile to start at 0
 
     x_r_func = interpolate.interp1d(x_lin, Altitude_smooth, fill_value="extrapolate")
     x_r_dot_func = interpolate.splev(x_lin, f_lin, der=1)
@@ -112,7 +123,18 @@ for road in roads:
         x_u_ddot = (1/m_u)*(ct*(x_s_dot - x_u_dot) + k_s*(x_s - x_u) - k_t*(x_u - xr))
         return [x_s_dot, x_s_ddot, x_u_dot, x_u_ddot]
 
-    sol = solve_ivp(eom, t_span, [0, 0, 0, 0], t_eval=t_space, method='RK45')
+    # --- Quasi-static equilibrium initial conditions ---
+    x_r0 = x_r(0)
+    x_r_dot0 = x_r_dot(0)
+    x_u0 = x_r0 + (m_u * g) / k_t
+    x_s0 = x_u0 + (m_s * g) / k_s
+    x_u_dot0 = x_r_dot0
+    x_s_dot0 = x_r_dot0
+    y0 = [x_s0, x_s_dot0, x_u0, x_u_dot0]
+
+    # --- Solve ODE ---
+    sol = solve_ivp(eom, t_span, y0, t_eval=t_space, method='RK45')
+    
     x_s, x_s_dot, x_u, x_u_dot = sol.y
     accels = np.array([eom(t, y) for t, y in zip(sol.t, sol.y.T)])
     x_s_ddot = accels[:, 1]
@@ -124,33 +146,63 @@ for road in roads:
     for b, a in sections:
         a_weighted = lfilter(b, a, a_weighted)
 
-    a_rms_weighted = np.sqrt(np.mean(a_weighted**2))
+    # --- Optional: trim 1.0s transient from start for RMS ---
+    t_start = 1.0  # Time to ignore (in seconds)
+    try:
+        idx_start = np.searchsorted(sol.t, t_start)
+        a_weighted_valid = a_weighted[idx_start:]
+        
+        if len(a_weighted_valid) == 0:
+            print(f"Warning: Trimming at {t_start}s left no data. Using all data.")
+            a_weighted_valid = a_weighted
+            idx_start = 0 # Reset index if trimming failed
+            
+    except Exception as e:
+        print(f"Warning: Trimming failed ({e}). Using all data.")
+        a_weighted_valid = a_weighted
+        idx_start = 0 # Reset index if trimming failed
+
+    a_rms_weighted = np.sqrt(np.mean(a_weighted_valid**2))
+    
     comfort = comfort_classification(a_rms_weighted)
     results.append({"Road": road["name"], "RMS": a_rms_weighted, "Comfort": comfort})
 
     # === Plots ===
+    
+    # --- Road Profile Plot (Trimmed) ---
     plt.figure(figsize=(8,4))
     plt.scatter(Ttotal, Altitude - Altitude[0], s=10, color="red", label="Original")
-    plt.plot(x_lin, Altitude_smooth, color="blue", label="Spline")
-    plt.title(f"{road['name']} – Road Profile")
+    plt.plot(x_lin, Altitude_smooth, color="blue", label=f"Spline (s={smoothing_factor})")
+    plt.title(f"{road['name']} – Road Profile (Trimmed from {t_start}s)")
     plt.xlabel("Time [s]"); plt.ylabel("Relative Displacement [m]")
-    plt.grid(True, ls="--", alpha=0.6); plt.legend(); plt.tight_layout(); plt.show()
+    plt.grid(True, ls="--", alpha=0.6); plt.legend()
+    # Set the x-axis to start at t_start
+    plt.xlim(t_start, x_lin[-1]) 
+    plt.tight_layout(); plt.show()
 
+    # --- Acceleration Plot (Trimmed) ---
     plt.figure(figsize=(10,5))
-    plt.plot(sol.t, x_s_ddot, label='Unweighted Accel')
-    plt.plot(sol.t, a_weighted, label='ISO Wk Weighted Accel', alpha=0.8)
+    # Plot only the data from idx_start onwards
+    plt.plot(sol.t[idx_start:], x_s_ddot[idx_start:], label='Unweighted Accel')
+    plt.plot(sol.t[idx_start:], a_weighted[idx_start:], label='ISO Wk Weighted Accel', alpha=0.8)
+    
+    # Plot positive and negative comfort lines
     plt.axhline(0.315, color='g', ls='--', label='Not uncomfortable')
+    plt.axhline(-0.315, color='g', ls='--')
     plt.axhline(0.63, color='orange', ls='--', label='A little uncomfortable')
+    plt.axhline(-0.63, color='orange', ls='--')
     plt.axhline(1.0, color='r', ls='--', label='Fairly uncomfortable')
+    plt.axhline(-1.0, color='r', ls='--')
+    
     plt.xlabel("Time [s]"); plt.ylabel("Acceleration [m/s²]")
-    plt.title(f"Sprung-Mass Acceleration – {road['name']}")
+    plt.title(f"Sprung-Mass Acceleration – {road['name']} (Trimmed from {t_start}s)")
     plt.legend(); plt.grid(True); plt.tight_layout(); plt.show()
 
-    print(f"\n=== {road['name']} ===")
-    print(f"Weighted RMS = {a_rms_weighted:.3f} m/s² → {comfort}")
+    print(f"=== {road['name']} ===")
+    print(f"Weighted RMS (from {t_start}s onwards) = {a_rms_weighted:.3f} m/s² → {comfort}")
 
     # === Frequency analysis & Wk curve comparison ===
-    f_psd, Pxx = welch(x_s_ddot, fs=fs, nperseg=2048)
+    f_psd, Pxx = welch(x_s_ddot, fs=fs, nperseg=2024)
     dominant_freq = f_psd[np.argmax(Pxx)]
     print(f"Dominant vibration frequency ≈ {dominant_freq:.2f} Hz")
 
@@ -175,6 +227,7 @@ comfort_levels = [r["Comfort"] for r in results]
 
 plt.figure(figsize=(10,5))
 bars = plt.bar(roads_list, rms_vals, color='skyblue', edgecolor='black')
+# Plot all levels for a consistent scale
 plt.axhline(0.315, color='g', ls='--', label='Not uncomfortable')
 plt.axhline(0.63, color='orange', ls='--', label='A little uncomfortable')
 plt.axhline(1.0, color='r', ls='--', label='Fairly uncomfortable')
