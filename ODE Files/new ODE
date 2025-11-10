@@ -1,0 +1,190 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy import interpolate
+from scipy.integrate import solve_ivp
+from scipy.signal import cont2discrete, lfilter, welch, freqz
+
+# === ISO 2631 Wk filter (Rimell et al., 2007) ===
+def build_iso_wk(fs):
+    f1, Q1 = 0.4, 0.5
+    f2, Q2 = 100.0, 0.5
+    f3, f4, Q4 = 12.5, 12.5, 0.63
+    f5, Q5, f6, Q6 = 2.37, 0.91, 3.3, 0.91
+
+    w1, w2, w3, w4, w5, w6 = [2*np.pi*f for f in [f1, f2, f3, f4, f5, f6]]
+    sections = []
+
+    # High-pass Hh
+    num = [1.0, 0.0, 0.0]
+    den = [1.0, w1/Q1, w1**2]
+    znum, zden, _ = cont2discrete((num, den), 1/fs, method='bilinear')
+    sections.append((znum.flatten(), zden.flatten()))
+
+    # Low-pass Hl
+    num = [0.0, 0.0, w2**2]
+    den = [1.0, w2/Q2, w2**2]
+    znum, zden, _ = cont2discrete((num, den), 1/fs, method='bilinear')
+    sections.append((znum.flatten(), zden.flatten()))
+
+    # Transition Ht
+    num = [0.0, w3, w3*w4]
+    den = [1.0, w4, w4**2]
+    znum, zden, _ = cont2discrete((num, den), 1/fs, method='bilinear')
+    sections.append((znum.flatten(), zden.flatten()))
+
+    # Step Hs
+    num = [1.0, w5/Q5, w5**2]
+    den = [1.0, w6/Q6, w6**2]
+    znum, zden, _ = cont2discrete((num, den), 1/fs, method='bilinear')
+    sections.append((znum.flatten(), zden.flatten()))
+
+    return sections
+
+def comfort_classification(a_rms):
+    if a_rms < 0.315: return "Not uncomfortable"
+    elif a_rms < 0.63: return "A little uncomfortable"
+    elif a_rms < 1.0: return "Fairly uncomfortable"
+    elif a_rms < 1.6: return "Uncomfortable"
+    elif a_rms < 2.5: return "Very uncomfortable"
+    else: return "Extremely uncomfortable"
+
+# === Suspension parameters ===
+m_s = 114.436125
+m_u = 15
+k_s = 90000
+k_t = 90000
+alpha = 0.1
+f = 1
+
+# === Roads and speeds ===
+roads = [
+    {"file": "Cobbled Road Royal Mile.xlsx", "name": "Cobbled Road Royal Mile", "velocity_mph": 20},
+    {"file": "Liberton Road (A Road).xlsx", "name": "Liberton Road (A Road)", "velocity_mph": 30},
+    {"file": "M8 To Glasgow.xlsx", "name": "M8 To Glasgow", "velocity_mph": 70},
+    {"file": "Pleasance Road (hilly).xlsx", "name": "Pleasance Road (hilly)", "velocity_mph": 20},
+    {"file": "Redford Road (B Road).xlsx", "name": "Redford Road (B Road)", "velocity_mph": 30},
+]
+
+results = []
+
+for road in roads:
+    df = pd.read_excel(road["file"])
+    velocity = road["velocity_mph"] * 0.44704
+
+    # --- Original interpolation kept intact ---
+    Latitude = df.iloc[:, 1].values
+    Longitude = df.iloc[:, 2].values
+    Altitude = df.iloc[:, 3].values
+
+    conversion = 111139
+    Latitude = np.array(Latitude) * conversion
+    Longitude = np.array(Longitude) * conversion
+
+    Lat_diffs = np.diff(Latitude)
+    Long_diffs = np.diff(Longitude)
+    D2 = Lat_diffs**2 + Long_diffs**2
+    D = np.sqrt(D2)
+    Dtotal = np.concatenate(([0.0], np.cumsum(D)))
+    Ttotal = Dtotal / velocity
+
+    x_lin = np.linspace(Ttotal[0], Ttotal[-1], 700)
+    f_lin = interpolate.splrep(Ttotal, Altitude, s=5)
+    Altitude_smooth = interpolate.splev(x_lin, f_lin, der=0)
+    Altitude_smooth -= Altitude_smooth[0]
+
+    x_r_func = interpolate.interp1d(x_lin, Altitude_smooth, fill_value="extrapolate")
+    x_r_dot_func = interpolate.splev(x_lin, f_lin, der=1)
+
+    def x_r(t): return x_r_func(t)
+    def x_r_dot(t): return float(np.interp(t, x_lin, x_r_dot_func))
+
+    # --- ODE system ---
+    t_span = (0, x_lin.max())
+    t_space = np.linspace(t_span[0], t_span[1], 1000)
+    c0 = 2*(m_s*k_s)**0.5
+    def c(t): return c0 * (1 + alpha * np.sin(2*np.pi*f*t))
+    def eom(t, y):
+        x_s, x_s_dot, x_u, x_u_dot = y
+        xr = x_r(t)
+        ct = c(t)
+        x_s_ddot = (1/m_s)*(-ct*(x_s_dot - x_u_dot) - k_s*(x_s - x_u))
+        x_u_ddot = (1/m_u)*(ct*(x_s_dot - x_u_dot) + k_s*(x_s - x_u) - k_t*(x_u - xr))
+        return [x_s_dot, x_s_ddot, x_u_dot, x_u_ddot]
+
+    sol = solve_ivp(eom, t_span, [0, 0, 0, 0], t_eval=t_space, method='RK45')
+    x_s, x_s_dot, x_u, x_u_dot = sol.y
+    accels = np.array([eom(t, y) for t, y in zip(sol.t, sol.y.T)])
+    x_s_ddot = accels[:, 1]
+
+    # === Apply ISO 2631 weighting ===
+    fs = 1 / np.mean(np.diff(sol.t))
+    sections = build_iso_wk(fs)
+    a_weighted = x_s_ddot.copy()
+    for b, a in sections:
+        a_weighted = lfilter(b, a, a_weighted)
+
+    a_rms_weighted = np.sqrt(np.mean(a_weighted**2))
+    comfort = comfort_classification(a_rms_weighted)
+    results.append({"Road": road["name"], "RMS": a_rms_weighted, "Comfort": comfort})
+
+    # === Plots ===
+    plt.figure(figsize=(8,4))
+    plt.scatter(Ttotal, Altitude - Altitude[0], s=10, color="red", label="Original")
+    plt.plot(x_lin, Altitude_smooth, color="blue", label="Spline")
+    plt.title(f"{road['name']} – Road Profile")
+    plt.xlabel("Time [s]"); plt.ylabel("Relative Displacement [m]")
+    plt.grid(True, ls="--", alpha=0.6); plt.legend(); plt.tight_layout(); plt.show()
+
+    plt.figure(figsize=(10,5))
+    plt.plot(sol.t, x_s_ddot, label='Unweighted Accel')
+    plt.plot(sol.t, a_weighted, label='ISO Wk Weighted Accel', alpha=0.8)
+    plt.axhline(0.315, color='g', ls='--', label='Not uncomfortable')
+    plt.axhline(0.63, color='orange', ls='--', label='A little uncomfortable')
+    plt.axhline(1.0, color='r', ls='--', label='Fairly uncomfortable')
+    plt.xlabel("Time [s]"); plt.ylabel("Acceleration [m/s²]")
+    plt.title(f"Sprung-Mass Acceleration – {road['name']}")
+    plt.legend(); plt.grid(True); plt.tight_layout(); plt.show()
+
+    print(f"\n=== {road['name']} ===")
+    print(f"Weighted RMS = {a_rms_weighted:.3f} m/s² → {comfort}")
+
+    # === Frequency analysis & Wk curve comparison ===
+    f_psd, Pxx = welch(x_s_ddot, fs=fs, nperseg=2048)
+    dominant_freq = f_psd[np.argmax(Pxx)]
+    print(f"Dominant vibration frequency ≈ {dominant_freq:.2f} Hz")
+
+    # Build Wk magnitude curve
+    w, h = freqz([1], [1], worN=2000, fs=fs)
+    for b, a in sections:
+        _, h_temp = freqz(b, a, worN=w, fs=fs)
+        h *= h_temp
+
+    plt.figure(figsize=(8,4))
+    plt.semilogx(w, 20*np.log10(abs(h)), label='ISO Wk Weighting (dB)')
+    plt.axvline(dominant_freq, color='r', ls='--',
+                label=f'Dominant ≈ {dominant_freq:.2f} Hz')
+    plt.xlabel('Frequency [Hz]'); plt.ylabel('Gain [dB]')
+    plt.title(f'Wk Weighting vs Road Frequency – {road["name"]}')
+    plt.grid(True, which='both', ls='--', alpha=0.6); plt.legend(); plt.tight_layout(); plt.show()
+
+# === Summary bar chart across roads ===
+roads_list = [r["Road"] for r in results]
+rms_vals = [r["RMS"] for r in results]
+comfort_levels = [r["Comfort"] for r in results]
+
+plt.figure(figsize=(10,5))
+bars = plt.bar(roads_list, rms_vals, color='skyblue', edgecolor='black')
+plt.axhline(0.315, color='g', ls='--', label='Not uncomfortable')
+plt.axhline(0.63, color='orange', ls='--', label='A little uncomfortable')
+plt.axhline(1.0, color='r', ls='--', label='Fairly uncomfortable')
+plt.axhline(1.6, color='m', ls='--', label='Uncomfortable')
+plt.axhline(2.5, color='k', ls='--', label='Very uncomfortable')
+plt.xticks(rotation=30, ha='right')
+plt.ylabel("Weighted RMS Acceleration [m/s²]")
+plt.title("ISO 2631 Comfort Comparison Across Roads")
+plt.legend(); plt.tight_layout()
+for bar, txt in zip(bars, comfort_levels):
+    plt.text(bar.get_x() + bar.get_width()/2, bar.get_height()+0.05, txt,
+             ha='center', va='bottom', fontsize=9, rotation=45)
+plt.show()
