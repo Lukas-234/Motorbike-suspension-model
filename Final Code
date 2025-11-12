@@ -1,5 +1,7 @@
 import numpy as np
 from scipy.linalg import eigh
+import os
+base_dir = os.path.dirname(os.path.abspath(__file__))
 import matplotlib.pyplot as plt
 import pandas as pd
 from scipy import interpolate
@@ -169,7 +171,11 @@ def road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t):
         x_lin = np.linspace(Ttotal[0], Ttotal[-1], 700)
 
         # Interpolation (set small smoothing for realistic curve)
-        f_lin = interpolate.splrep(Ttotal, Altitude, s=0.05)
+       # Interpolation (set small smoothing for realistic curve)
+        smoothing_factor = road["spline_s"]
+        #print(f"Using smoothing factor s={smoothing_factor}")
+        f_lin = interpolate.splrep(Ttotal, Altitude, s=smoothing_factor)
+       
         Altitude_smooth = interpolate.splev(x_lin, f_lin, der=0)
 
         # Normalize road profile so it starts at 0 m
@@ -265,35 +271,18 @@ def road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t):
         20.5, 15.2, 7.90, 3.98, 1.95])
        
         rms_iso=iso_weighting(x_s_ddot, fs, f_intervals,iso_weights)
-        # Reference (target) values
-        rms_ref = 0.8        # m/s² from ideal ISO weighted acceleration
-        stroke_ref = 0.08    # m approximateideal RMS stroke
-        unsprung_ref = 12.0  # m/s² approx ideal unsprung acceleration
-        heave_ref = 0.04     # m approx ideal body heave
+
+# Primary comfort objective is still the ISO-weighted RMS acceleration
+# (Optionally normalize by rms_ref so values are order-of-one)
         
-        stroke = x_s_plot - x_u_plot
-        stroke_rms = np.sqrt(np.mean(stroke**2))
-        stroke_max = np.max(np.abs(stroke))
-        sprung_rms = np.sqrt(np.mean(x_s_ddot_plot**2))
-        unsprung_rms = np.sqrt(np.mean(x_u_ddot_plot**2))
-        heave = np.sqrt(np.mean((x_s_plot - np.mean(x_s_plot))**2))
-        
-        rms_score = np.exp(-((rms_iso / rms_ref) ** 2))
-        stroke_score = np.exp(-((stroke_rms / stroke_ref) ** 2))
-        unsprung_score = np.exp(-((unsprung_rms / unsprung_ref) ** 2))
-        heave_score = np.exp(-((heave / heave_ref) ** 2))
-        comfort_metric = (
-            0.5 * rms_score +     # main comfort driver
-            0.2 * stroke_score +  # smooth motion
-            0.2 * unsprung_score +# tire contact/harshness
-            0.1 * heave_score     # low-frequency ride
-        )
+        comfort_metric = rms_iso 
+      
+
+
         results.append({
             "road": road["name"],
             "velocity_mph": road["velocity_mph"],
             "weighted_rms": rms_iso,
-            "stroke_rms": stroke_rms ,
-            "stroke_max":stroke_max,
             "comfort_metric":comfort_metric
         })
 
@@ -301,40 +290,40 @@ def road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t):
     return results
 
     
-f_targets = np.array([1.0, 1.1, 1.2,1.3,1.4, 1.5])        # Hz
-delta_targets = np.linspace(0.2, 0.35, 5)     # damping ratios
+f_targets = np.array([0.8, 0.9,1.0,1.1,1.2,1.3,1.4, 1.5,1.6])        # Hz
+delta_target = 0.25  # damping ratios
 results=[]
-for f_t in f_targets:
-    for d_t in delta_targets:
-        print(f"\nRunning for f_target={f_t:.2f} Hz, ζ_target={d_t:.2f}")
-        m_s = 63 #kg mass acting on the rear of the bike (61.5%)
-        m_u = 15 #kg mass of rear wheel and tyre
-        m_d = 80 #kg mass of the driver to work out inertial force 
-        k_t = 100000 #N/m rear tyre stiffness
-        M = np.array([[m_s + m_d, 0], 
-                      [0, m_u]])
+for f_t in f_targets: 
+    print(f"\nRunning for f_target={f_t:.2f} Hz, ζ_target={delta_target:.2f}")
+    m_s = 113.54 #kg mass acting on the rear of the bike (61.5%)
+    m_u = 15 #kg mass of rear wheel and tyre
+    m_d = 80 #kg mass of the driver to work out inertial force 
+    k_t = 100000 #N/m rear tyre stiffness
+    M = np.array([[m_s + m_d, 0], 
+                  [0, m_u]])
 
 
-        k_s_opt = k_finder(f_t, m_s, m_u, m_d, k_t)
-        c_s_opt = c_finder(k_s_opt, d_t, M, k_t)
+    k_s_opt = k_finder(f_t, m_s, m_u, m_d, k_t)
+    c_s_opt = c_finder(k_s_opt, delta_target, M, k_t)
         
-        roads = [
-            {"file": "Cobbled Road Royal Mile.xlsx", "name": "Cobbled Road Royal Mile", "velocity_mph": 20},
-            {"file": "Liberton Road (A Road).xlsx", "name": "Liberton Road", "velocity_mph": 30},
-            {"file": "Pleasance Road (hilly).xlsx", "name": "Pleasance Road", "velocity_mph": 20},
-            {"file": "Redford Road (B Road).xlsx", "name": "Redford Road", "velocity_mph": 30}
-        ]
+    roads = [
+        {"file": os.path.join(base_dir, "Cobbled Road Royal Mile.xlsx"), "name": "Cobbled Road Royal Mile", "velocity_mph": 20, "spline_s": 0.4},
+        {"file": os.path.join(base_dir, "Liberton Road (A Road).xlsx"), "name": "Liberton Road (A Road)", "velocity_mph": 30, "spline_s": 1},
+        {"file": os.path.join(base_dir, "M8 To Glasgow.xlsx"), "name": "M8 To Glasgow", "velocity_mph": 70, "spline_s": 10},
+        {"file": os.path.join(base_dir, "Pleasance Road (hilly).xlsx"), "name": "Pleasance Road (hilly)", "velocity_mph": 20, "spline_s": 0.5},
+        {"file": os.path.join(base_dir, "Queens Drive (Arthurs seat road).xlsx"), "name": "Queens Drive (Arthurs seat road)", "velocity_mph": 30, "spline_s": 1}
+    ]
         
         # running road simulations to evaluate weighted rms accleration
-        road_metrics = road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t)
-        avg_comfort =np.mean ([r["comfort_metric"] for r in road_metrics])
+    road_metrics = road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t)
+    avg_comfort =np.mean ([r["comfort_metric"] for r in road_metrics])
         
-        results.append({
-            "f_target": f_t,
-            "zeta_target": d_t,
-            "k_s_opt": k_s_opt,
-            "c_s_opt": c_s_opt,
-            "mean_comfort_metric": avg_comfort
+    results.append({
+        "f_target": f_t,
+        "zeta_target": delta_target,
+        "k_s_opt": k_s_opt,
+        "c_s_opt": c_s_opt,
+        "mean_comfort_metric": avg_comfort
         })
         
 df_results = pd.DataFrame(results)
@@ -366,4 +355,4 @@ print("="*70)
 
 
 print("\nAll designs sorted by comfort (ascending comfort metric):")
-print(df_results.sort_values("mean_comfort_metric").reset_index(drop=True))   
+print(df_results.sort_values("mean_comfort_metric").reset_index(drop=True)) 
