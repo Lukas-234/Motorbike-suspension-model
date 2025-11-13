@@ -380,7 +380,7 @@ def road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t, plot=False):
     return results
 
     
-f_targets = np.array([0.9,1.0,1.1,1.2,1.3,1.5,1.6,1.8,2.0])        # Hz
+f_targets = np.array([1.0,1.1,1.2,1.3,1.5,1.6,1.8,2., 2.2,2.5])        # Hz
 delta_target = 0.25  # damping ratios
 results=[]
 for f_t in f_targets: 
@@ -399,9 +399,10 @@ for f_t in f_targets:
         {"file": os.path.join(base_dir, "Cobbled Road Royal Mile.xlsx"), "name": "Cobbled Road Royal Mile", "velocity_mph": 20, "spline_s": 0.4},
         {"file": os.path.join(base_dir, "Liberton Road (A Road).xlsx"), "name": "Liberton Road (A Road)", "velocity_mph": 30, "spline_s": 0.4},
         {"file": os.path.join(base_dir, "M8 To Glasgow.xlsx"), "name": "M8 To Glasgow", "velocity_mph": 70, "spline_s": 100},
+        {"file": os.path.join(base_dir, "EdiBypass.xlsx"), "name": "EdiBypass", "velocity_mph": 70, "spline_s": 100},
+        {"file": os.path.join(base_dir, "M90.xlsx"), "name": "M90", "velocity_mph": 70, "spline_s": 100},
         {"file": os.path.join(base_dir, "Pleasance Road (hilly).xlsx"), "name": "Pleasance Road (hilly)", "velocity_mph": 20, "spline_s": 0.4},
         {"file": os.path.join(base_dir, "Queens Drive (Arthurs seat road).xlsx"), "name": "Queens Drive (Arthurs seat road)", "velocity_mph": 30, "spline_s": 0.4},
-       # {"file": os.path.join(base_dir, "Redford Road (B Road).xlsx"), "name": "Redford Road (B Road)", "velocity_mph": 30, "spline_s": 0.1}
     ]
         
         # running road simulations to evaluate weighted rms accleration
