@@ -398,7 +398,7 @@ for f_t in f_targets:
     roads = [
         {"file": os.path.join(base_dir, "Cobbled Road Royal Mile.xlsx"), "name": "Cobbled Road Royal Mile", "velocity_mph": 20, "spline_s": 0.4},
         {"file": os.path.join(base_dir, "Liberton Road (A Road).xlsx"), "name": "Liberton Road (A Road)", "velocity_mph": 30, "spline_s": 0.4},
-        {"file": os.path.join(base_dir, "M8 To Glasgow.xlsx"), "name": "M8 To Glasgow", "velocity_mph": 70, "spline_s": 40},
+        {"file": os.path.join(base_dir, "M8 To Glasgow.xlsx"), "name": "M8 To Glasgow", "velocity_mph": 70, "spline_s": 100},
         {"file": os.path.join(base_dir, "Pleasance Road (hilly).xlsx"), "name": "Pleasance Road (hilly)", "velocity_mph": 20, "spline_s": 0.4},
         {"file": os.path.join(base_dir, "Queens Drive (Arthurs seat road).xlsx"), "name": "Queens Drive (Arthurs seat road)", "velocity_mph": 30, "spline_s": 0.4},
        # {"file": os.path.join(base_dir, "Redford Road (B Road).xlsx"), "name": "Redford Road (B Road)", "velocity_mph": 30, "spline_s": 0.1}
