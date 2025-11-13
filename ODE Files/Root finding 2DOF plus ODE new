@@ -9,9 +9,8 @@ from scipy.integrate import solve_ivp
 from scipy.signal import cont2discrete, lfilter, welch, freqz
 
 # System parameters
-m_s = 63      # kg, sprung mass (rear portion of scooter)
+m_s = 114.436125      # kg, sprung mass (rear portion of scooter)
 m_u = 15        # kg, unsprung mass (wheel, swing arm)
-m_d = 80        # kg, rider mass
 k_t = 100000    # N/m, tire stiffness
 
 
@@ -20,12 +19,11 @@ f_target = 1  # Hz
 delta_target=0.3 #for max comfort industry standard
 
 # Mass matrix
-M = np.array([[m_s + m_d, 0], 
+M = np.array([[m_s, 0], 
               [0, m_u]])
 
 # Initial guess for k_s bounds using single DOF approximation
-m_total = m_s + m_d
-k_estimate = (2 * np.pi * f_target)**2 * m_total
+k_estimate = (2 * np.pi * f_target)**2 * m_s
 k_s_lower = 0.5 * k_estimate
 k_s_higher = 2 * k_estimate
 
@@ -100,6 +98,11 @@ def rf_func2(k_s, c_s):
 
 # Only positive imaginary part (oscillatory)
     pos_idx = [i for i, lam in enumerate(eigvals) if np.imag(lam) > 1e-8]
+    
+    if len(pos_idx) == 0:
+        print(f"[WARNING] No oscillatory eigenvalues for c_s = {c_s:.2f} → overdamped system")
+        return 0.0  
+    
     eigvals = eigvals[pos_idx]
     eigvecs = eigvecs[:, pos_idx]
 
