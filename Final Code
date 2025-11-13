@@ -6,9 +6,52 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from scipy import interpolate
 from scipy.integrate import solve_ivp
-from scipy.signal import welch
+from scipy.signal import cont2discrete, welch, freqz, sosfiltfilt, tf2sos
 
-def k_finder(f_target, m_s, m_u, m_d, k_t):
+# === ISO 2631 Wk filter (Rimell et al., 2007) ===
+def build_iso_wk(fs):
+    f1, Q1 = 0.4, 0.5
+    f2, Q2 = 100.0, 0.5
+    f3, f4, Q4 = 12.5, 12.5, 0.63
+    f5, Q5, f6, Q6 = 2.37, 0.91, 3.3, 0.91
+
+    w1, w2, w3, w4, w5, w6 = [2*np.pi*f for f in [f1, f2, f3, f4, f5, f6]]
+    sections = []
+
+    # High-pass Hh
+    num = [1.0, 0.0, 0.0]
+    den = [1.0, w1/Q1, w1**2]
+    znum, zden, _ = cont2discrete((num, den), 1/fs, method='bilinear')
+    sections.append((znum.flatten(), zden.flatten()))
+
+    # Low-pass Hl
+    num = [0.0, 0.0, w2**2]
+    den = [1.0, w2/Q2, w2**2]
+    znum, zden, _ = cont2discrete((num, den), 1/fs, method='bilinear')
+    sections.append((znum.flatten(), zden.flatten()))
+
+    # Transition Ht
+    num = [0.0, w3, w3*w4]
+    den = [1.0, w4, w4**2]
+    znum, zden, _ = cont2discrete((num, den), 1/fs, method='bilinear')
+    sections.append((znum.flatten(), zden.flatten()))
+
+    # Step Hs
+    num = [1.0, w5/Q5, w5**2]
+    den = [1.0, w6/Q6, w6**2]
+    znum, zden, _ = cont2discrete((num, den), 1/fs, method='bilinear')
+    sections.append((znum.flatten(), zden.flatten()))
+
+    return sections
+def comfort_classification(a_rms):
+    if a_rms < 0.315: return "Not uncomfortable"
+    elif a_rms < 0.63: return "A little uncomfortable"
+    elif a_rms < 1.0: return "Fairly uncomfortable"
+    elif a_rms < 1.6: return "Uncomfortable"
+    elif a_rms < 2.5: return "Very uncomfortable"
+    else: return "Extremely uncomfortable"
+    
+def k_finder(f_target, m_s, m_u, k_t):
     m_total=m_u+m_s
     k_estimate = (2 * np.pi * f_target)**2 * m_total
     k_s_lower = 0.5 * k_estimate
@@ -20,7 +63,7 @@ def k_finder(f_target, m_s, m_u, m_d, k_t):
         """
         K = np.array([[k_s, -k_s], 
                       [-k_s, k_s + k_t]])
-        M = np.array([[m_s + m_d, 0], 
+        M = np.array([[m_s, 0], 
                       [0, m_u]])
         
         eigenvalues, eigenvectors = eigh(K, M)
@@ -65,7 +108,6 @@ def k_finder(f_target, m_s, m_u, m_d, k_t):
         
     else:
         print('✗ NO CONVERGENCE')
-    per_spring=k_s_curr*0.5
     k_s_opt=k_s_curr
    # print(f"k_s_opt={k_s_opt:.2f} N/m")
     return k_s_opt
@@ -80,22 +122,32 @@ def c_finder(k_opt, delta_target, M, k_t):
         A = np.block([[np.zeros((2,2)), np.eye(2)],
                       [-M_inv @ K, -M_inv @ C]])
         eigvals, eigvecs = np.linalg.eig(A)
-
-
-    # Only positive imaginary part (oscillatory)
-        pos_idx = [i for i, lam in enumerate(eigvals) if np.imag(lam) > 1e-8]
-        eigvals = eigvals[pos_idx]
-        eigvecs = eigvecs[:, pos_idx]
-
-    # Pick mode with largest sprung-mass participation
-        participations = [abs(eigvecs[0,i]) for i in range(len(eigvals))]
+        n_sprung = 1
+        
+        participations = []
+        for i in range(eigvecs.shape[1]):
+            # Only consider the position entries for sprung mass
+            P = np.sum(np.abs(eigvecs[0:n_sprung, i]))
+            participations.append(P)
+        
+        # --- Step 2: pick mode with largest sprung mass participation ---
+        if len(participations) == 0:
+            # Fallback if no modes found
+            return 0.0
         mode_index = np.argmax(participations)
         lam_mode = eigvals[mode_index]
-
+        
+        # --- Step 3: compute modal damping ---
         sigma = np.real(lam_mode)
         omega_d = np.imag(lam_mode)
-        delta = -sigma / np.sqrt(sigma**2 + omega_d**2)
+        
+        # Avoid division by zero
+        if np.isclose(sigma**2 + omega_d**2, 0.0):
+            delta = 0.0
+        else:
+            delta = -sigma / np.sqrt(sigma**2 + omega_d**2)
         return delta
+
     def objective_func(c_s):
         return rf_func2(k_s_opt, c_s)- delta_target
         
@@ -132,11 +184,9 @@ def c_finder(k_opt, delta_target, M, k_t):
         c_curr, F_curr = c_new, objective_func(c_new)
 
     c_s_opt = c_curr
-    c_s_per_damper = c_s_opt / 2  # Twin shocks
- #   print(f"c_s_opt={c_s_opt:.2f} N/m")
     return c_s_opt
 
-def road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t):
+def road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t, plot=False):
     results=[]
     for road in roads:
         # === Cobbled Road Royal Mile ===
@@ -193,7 +243,6 @@ def road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t):
         t_span = (0, x_lin.max())
         t_space = np.linspace(t_span[0], t_span[1], 1000)
 
-        #c0 = 0.35*(2*(m_s*k_s)**0.5) #Ns/m
         alpha = 0.1 #10% variation due to environmental changes
         f = 1 #Hz frequency of variation of damping, allows for change every second
         
@@ -224,20 +273,15 @@ def road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t):
         x_u_ddot = accels[:, 3]
     
         
-        t_start = 2.5  # seconds
+        t_start =2.5  # seconds
 
         # Find the index where sol.t >= t_start
         idx_start = np.searchsorted(sol.t, t_start)
 
         # Slice time and corresponding data
         t_plot = sol.t[idx_start:]
-        x_s_plot = x_s[idx_start:]
-        x_s_dot_plot=x_s_dot[idx_start:]
         x_s_ddot_plot = x_s_ddot[idx_start:]
-        x_u_plot=x_u[idx_start:]
-        x_u_dot_plot=x_u_dot[idx_start:]
-        x_u_ddot_plot=x_u_ddot[idx_start:]
-        x_rp_plot = x_rp[idx_start:]
+       
         
         
         fs = 1/np.mean(np.diff(t_plot))
@@ -245,6 +289,49 @@ def road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t):
         "iso, if frequencey of sprung mass acceleration lies in sensitive band more weight is given"
         "to that acceleration value , giving a better evaluation of comfort"
         
+        if plot:
+            #use digital filter to access instantaneous weighted accelerations
+            sections = build_iso_wk(fs)
+            a_weighted = x_s_ddot_plot.copy()
+            for b, a in sections:
+                sos = tf2sos(b, a)             # convert to SOS
+                a_weighted = sosfiltfilt(sos, a_weighted)
+            idx_start = np.searchsorted(sol.t, t_start)
+            a_weighted_valid = a_weighted[idx_start:]
+            a_rms_weighted = np.sqrt(np.mean(a_weighted_valid**2))
+            
+            # --- Road Profile Plot (Trimmed) ---
+            plt.figure(figsize=(8,4))
+            plt.scatter(Ttotal, Altitude - Altitude[0], s=10, color="red", label="Original")
+            plt.plot(x_lin, Altitude_smooth, color="blue", label=f"Spline (s={smoothing_factor})")
+            plt.title(f"{road['name']} – Road Profile (Trimmed from {t_start}s)")
+            plt.xlabel("Time [s]"); plt.ylabel("Relative Displacement [m]")
+            plt.grid(True, ls="--", alpha=0.6); plt.legend()
+            # Set the x-axis to start at t_start
+            plt.xlim(t_start, x_lin[-1]) 
+            plt.tight_layout(); plt.show()
+
+            # --- Acceleration Plot (Trimmed) ---
+            plt.figure(figsize=(10,5))
+            # Plot only the data from idx_start onwards
+            plt.plot(sol.t[idx_start:], x_s_ddot[idx_start:], label='Unweighted Accel')
+            plt.plot(sol.t[idx_start:], a_weighted, label='ISO Wk Weighted Accel', alpha=0.8)
+            
+            # Plot positive and negative comfort lines
+            plt.axhline(0.315, color='g', ls='--', label='Not uncomfortable')
+            plt.axhline(-0.315, color='g', ls='--')
+            plt.axhline(0.63, color='orange', ls='--', label='A little uncomfortable')
+            plt.axhline(-0.63, color='orange', ls='--')
+            plt.axhline(1.0, color='r', ls='--', label='Fairly uncomfortable')
+            plt.axhline(-1.0, color='r', ls='--')
+            
+            plt.xlabel("Time [s]"); plt.ylabel("Acceleration [m/s²]")
+            plt.title(f"Sprung-Mass Acceleration – {road['name']} (Trimmed from {t_start}s)")
+            plt.legend(); plt.grid(True); plt.tight_layout(); plt.show()
+
+            print(f"=== {road['name']} ===")
+            print(f"Weighted RMS (from {t_start}s onwards) = {a_rms_weighted:.3f} m/s² ")
+            
         def iso_weighting(x_s_ddot, fs, f_intervals, iso_weights):
             f, psd= welch(x_s_ddot, fs=fs)
             df=f[1]-f[0]
@@ -275,43 +362,46 @@ def road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t):
 # Primary comfort objective is still the ISO-weighted RMS acceleration
 # (Optionally normalize by rms_ref so values are order-of-one)
         
-        comfort_metric = rms_iso 
       
 
-
-        results.append({
+        entry={
             "road": road["name"],
             "velocity_mph": road["velocity_mph"],
             "weighted_rms": rms_iso,
-            "comfort_metric":comfort_metric
-        })
+            "comfort_metric": rms_iso,   # use same key for both plotting & analysis
+        }
+        if plot:
+             entry["a_weighted_time"] = a_weighted  # only defined when plot=True
+
+        results.append(entry)
+ 
 
     # Return list of results for all roads
     return results
 
     
-f_targets = np.array([0.8, 0.9,1.0,1.1,1.2,1.3,1.4, 1.5,1.6])        # Hz
+f_targets = np.array([0.9,1.0,1.1,1.2,1.3,1.5,1.6,1.8,2.0])        # Hz
 delta_target = 0.25  # damping ratios
 results=[]
 for f_t in f_targets: 
     print(f"\nRunning for f_target={f_t:.2f} Hz, ζ_target={delta_target:.2f}")
     m_s = 113.54 #kg mass acting on the rear of the bike (61.5%)
-    m_u = 15 #kg mass of rear wheel and tyre
-    m_d = 80 #kg mass of the driver to work out inertial force 
+    m_u = 15 #kg mass of rear wheel and tyre 
     k_t = 100000 #N/m rear tyre stiffness
-    M = np.array([[m_s + m_d, 0], 
+    M = np.array([[m_s, 0], 
                   [0, m_u]])
 
 
-    k_s_opt = k_finder(f_t, m_s, m_u, m_d, k_t)
+    k_s_opt = k_finder(f_t, m_s, m_u, k_t)
     c_s_opt = c_finder(k_s_opt, delta_target, M, k_t)
         
     roads = [
         {"file": os.path.join(base_dir, "Cobbled Road Royal Mile.xlsx"), "name": "Cobbled Road Royal Mile", "velocity_mph": 20, "spline_s": 0.4},
-        {"file": os.path.join(base_dir, "Liberton Road (A Road).xlsx"), "name": "Liberton Road (A Road)", "velocity_mph": 30, "spline_s": 1},
-        {"file": os.path.join(base_dir, "M8 To Glasgow.xlsx"), "name": "M8 To Glasgow", "velocity_mph": 70, "spline_s": 10},
-        {"file": os.path.join(base_dir, "Pleasance Road (hilly).xlsx"), "name": "Pleasance Road (hilly)", "velocity_mph": 20, "spline_s": 0.5},
-        {"file": os.path.join(base_dir, "Queens Drive (Arthurs seat road).xlsx"), "name": "Queens Drive (Arthurs seat road)", "velocity_mph": 30, "spline_s": 1}
+        {"file": os.path.join(base_dir, "Liberton Road (A Road).xlsx"), "name": "Liberton Road (A Road)", "velocity_mph": 30, "spline_s": 0.4},
+        {"file": os.path.join(base_dir, "M8 To Glasgow.xlsx"), "name": "M8 To Glasgow", "velocity_mph": 70, "spline_s": 40},
+        {"file": os.path.join(base_dir, "Pleasance Road (hilly).xlsx"), "name": "Pleasance Road (hilly)", "velocity_mph": 20, "spline_s": 0.4},
+        {"file": os.path.join(base_dir, "Queens Drive (Arthurs seat road).xlsx"), "name": "Queens Drive (Arthurs seat road)", "velocity_mph": 30, "spline_s": 0.4},
+       # {"file": os.path.join(base_dir, "Redford Road (B Road).xlsx"), "name": "Redford Road (B Road)", "velocity_mph": 30, "spline_s": 0.1}
     ]
         
         # running road simulations to evaluate weighted rms accleration
@@ -323,7 +413,8 @@ for f_t in f_targets:
         "zeta_target": delta_target,
         "k_s_opt": k_s_opt,
         "c_s_opt": c_s_opt,
-        "mean_comfort_metric": avg_comfort
+        "mean_comfort_metric": avg_comfort,
+        "road_metrics": road_metrics
         })
         
 df_results = pd.DataFrame(results)
@@ -341,9 +432,11 @@ plt.ylabel("Target Damping ζ")
 plt.title("Design Sweep Heatmap:Comfort Metric")
 plt.show()
 
+#%%
 # Find design with lowest mean weighted RMS
 best_idx = df_results["mean_comfort_metric"].idxmin()
 best_design = df_results.loc[best_idx]
+best_road_metrics = results[best_idx]["road_metrics"]
 
 print("BEST SUSPENSION DESIGN FOUND")
 print(f"Target Frequency (f_target): {best_design['f_target']:.2f} Hz")
@@ -352,6 +445,51 @@ print(f"Optimal Spring Stiffness (k_s_opt): {best_design['k_s_opt']:.2f} N/m")
 print(f"Optimal Damping Coefficient (c_s_opt): {best_design['c_s_opt']:.2f} N·s/m")
 print(f"Comfort metric: {best_design['mean_comfort_metric']:.5f} m/s²")
 print("="*70)
+
+road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t, plot=True)
+
+roads_list = [r["road"] for r in best_road_metrics]
+rms_vals = [r["weighted_rms"] for r in best_road_metrics]
+comfort_levels = []
+for rms in rms_vals:
+    if rms < 0.315:
+        comfort_levels.append("Not uncomfortable")
+    elif rms < 0.63:
+        comfort_levels.append("A little uncomfortable")
+    elif rms < 1.0:
+        comfort_levels.append("Fairly uncomfortable")
+    elif rms < 1.6:
+        comfort_levels.append("Uncomfortable")
+    elif rms < 2.5:
+        comfort_levels.append("Very uncomfortable")
+    else:
+        comfort_levels.append("Extremely uncomfortable")
+
+# === Plot ISO comfort levels ===
+plt.figure(figsize=(10,5))
+bars = plt.bar(roads_list, rms_vals, color='skyblue', edgecolor='black')
+
+# ISO comfort thresholds
+plt.axhline(0.315, color='g', ls='--', label='Not uncomfortable')
+plt.axhline(0.63, color='orange', ls='--', label='A little uncomfortable')
+plt.axhline(1.0, color='r', ls='--', label='Fairly uncomfortable')
+plt.axhline(1.6, color='m', ls='--', label='Uncomfortable')
+plt.axhline(2.5, color='k', ls='--', label='Very uncomfortable')
+
+plt.xticks(rotation=30, ha='right')
+plt.ylabel("ISO-weighted RMS Acceleration [m/s²]")
+plt.title("ISO 2631 Comfort Comparison Across Roads – Best Suspension Design")
+plt.legend()
+plt.tight_layout()
+
+# Annotate comfort labels above bars
+for bar, txt in zip(bars, comfort_levels):
+    plt.text(bar.get_x() + bar.get_width()/2,
+             bar.get_height() + 0.05,
+             txt,
+             ha='center', va='bottom', fontsize=9, rotation=45)
+
+plt.show()
 
 
 print("\nAll designs sorted by comfort (ascending comfort metric):")
