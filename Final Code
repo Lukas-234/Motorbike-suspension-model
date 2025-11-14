@@ -10,6 +10,31 @@ from scipy.signal import cont2discrete, welch, freqz, sosfiltfilt, tf2sos
 
 # === ISO 2631 Wk filter (Rimell et al., 2007) ===
 def build_iso_wk(fs):
+    """
+    Build the ISO 2631 Wk frequency weighting filter for vibration comfort analysis.
+    
+    This function creates a digital approximation of the Wk filter described in 
+    ISO 2631 (Rimell et al., 2007), which is used to weight vertical acceleration 
+    signals according to human sensitivity in the time domain for visualisation only.
+    
+    Add description of filter?
+
+    Parameters:
+    fs : float
+    fs is the Sampling frequency [Hz] of the digital signal to be filtered.
+
+    Returns:
+    sections : list of tuple
+    List of tuples containing coefficients of each second-order section
+    in discrete-time (digital) form. Each tuple corresponds to 
+    a filter stage: high-pass, low-pass, transition, and step.
+
+    Notes
+    -----
+    The Wk filter is designed to weight vertical accelerations such that
+    vibrations in frequency ranges most sensitive to human discomfort 
+    in a seated position are emphasized.
+    """
     f1, Q1 = 0.4, 0.5
     f2, Q2 = 100.0, 0.5
     f3, f4, Q4 = 12.5, 12.5, 0.63
@@ -44,6 +69,19 @@ def build_iso_wk(fs):
 
     return sections
 def comfort_classification(a_rms):
+    """
+    Classify human comfort level based on ISO 2631 weighted RMS acceleration
+    for visualisation
+
+    Parameters:
+    a_rms : float
+    a_rms is the ISO-weighted RMS vertical acceleration [m/s²] of the sprung mass.
+
+    Returns:
+    comfort_level : str
+    comfort_level is the comfort classification 
+    according to ISO 2631 thresholds
+    """
     if a_rms < 0.315: return "Not uncomfortable"
     elif a_rms < 0.63: return "A little uncomfortable"
     elif a_rms < 1.0: return "Fairly uncomfortable"
@@ -52,50 +90,117 @@ def comfort_classification(a_rms):
     else: return "Extremely uncomfortable"
     
 def k_finder(f_target, m_s, m_u, k_t):
-    m_total=m_u+m_s
+    """
+    Finds the suspension stiffness k_s required to achieve a target sprung-mass 
+    natural frequency in a 2-DOF quarter-car model.
+
+    This function finds the best suspension stiffness k_s such that 
+    sprung mass mode of the 2DOF system is equivalent to the target 
+    natural frequency f_target
+    The unsprung mass mode is ignored as only the eigenvector
+    with the highest participation from the sprung mass is used.
+    The solution is obtained using a Secant method root-finder.
+
+    Parameters:
+    f_target : float
+    Target natural frequency of the sprung-mass mode [Hz].
+    m_s : float
+    The percentage of sprung mass which acts on the rear wheel  [kg].
+    m_u : float
+    Unsprung mass of the rear wheel[kg].
+    k_t : float
+    Tire stiffness [N/m].
+
+    Returns:
+    k_s_opt : float
+    The suspension stiffness [N/m] that matches the target frequency 
+    for the sprung-mass mode.
+
+    Notes
+    -----
+    - The eigenproblem K φ = λ M φ yields λ = ω² and ω = 2πf.
+    - The mode with maximum participation at the sprung-mass DOF (index 0)
+      is selected as the “sprung” mode.
+    - The Secant method iteratively solves f_mode(k_s) - f_target = 0.
+
+    """
+    m_total=m_u+m_s 
+    """
+    below is an estimate of the spring stiffness for a target frequency using
+    1DOF model this estimate is used to determine an interval of
+    reasonable intial guesses to be used within the Secant method"""
     k_estimate = (2 * np.pi * f_target)**2 * m_total
     k_s_lower = 0.5 * k_estimate
     k_s_higher = 2 * k_estimate
+    
     def rf_func(k_s):
         """
-        Returns: actual_frequency - target_frequency
-        Root when this equals zero
+        This functions provides the residual function
+        = actual_sprung_mode_frequency - target_frequency
+        to be used in the Secant solver. 
+        The secant solver will then find the root of this 
+        equation which corresponds to a k_s value which 
+        gives a frequency equivalent
+        to the target sprung-mass frequency f_target
+     
+               
+        Parameters: 
+        k_s : float
+        The suspension stiffness [N/m] that matches the target 
+        frequency for the sprung-mass mode.
+        
+        Returns: 
+        actual_frequency - target_frequency
+        This allows the secant method to find k_s such that
+        this residual function equals zero
         """
-        K = np.array([[k_s, -k_s], 
+        #Build stiffness matrix K
+        K = np.array([[k_s, -k_s],  
                       [-k_s, k_s + k_t]])
-        M = np.array([[m_s, 0], 
+        #Build mass matirx M
+        M = np.array([[m_s, 0],  
                       [0, m_u]])
         
+        # Solve generalized eigenvalue problem K φ = λ M φ
+        
         eigenvalues, eigenvectors = eigh(K, M)
+        
+        #From solutions extract natural frequency
         omega_squared = eigenvalues
         omega = np.sqrt(omega_squared)
+        #Convert to Hz
         freq = omega / (2 * np.pi)
+        
         participations = np.abs(eigenvectors[0,:])  # sprung mass DOF is index 0
         mode_index = np.argmax(participations)      # mode with largest sprung participation
         f_mode = freq[mode_index] # Sprung mass mode (lower frequency)
         
         return f_mode - f_target
 
-    # Secant method implementation
+    """
+    Secant method implementation
+    """
+    #Initial guesses from 1DOF model
     k_s_last, k_s_curr = k_s_lower, k_s_higher
+    #Compute the residual functions fo these guesses
     F_last, F_curr = rf_func(k_s_last), rf_func(k_s_curr)
 
-    max_iterations = 50
-    tolerance = 1e-4  # Hz
+    max_iterations = 50 
+    tolerance = 1e-4  # Hz tolerance for convergence
 
- #   print(f"Target frequency: {f_target} Hz Hz\n")
 
+    #Secant Loop
     for i in range(max_iterations):
-        # Check convergence
+        # Check convergence if frequency error is small enough
         if abs(F_curr) < tolerance:
-          #  print(f"found k in {i+1} iterations")
             break
         
-        # Secant method update
+        #Safe-Guard to prevent dividing by 0
         safe_gd = F_curr - F_last
         if abs(safe_gd) < 1e-12:
             safe_gd = np.sign(safe_gd) * 1e-12
         
+        #Secant update approximating derivative
         k_s_new = k_s_curr - F_curr * (k_s_curr - k_s_last) / safe_gd
         
         # Ensure positive stiffness
@@ -108,36 +213,107 @@ def k_finder(f_target, m_s, m_u, k_t):
         
     else:
         print('✗ NO CONVERGENCE')
+   #rename final k_s_curr to k_s_opt for clarity     
     k_s_opt=k_s_curr
-   # print(f"k_s_opt={k_s_opt:.2f} N/m")
+    
     return k_s_opt
-def c_finder(k_opt, delta_target, M, k_t):
+
+def c_finder(k_opt, zeta_target, M, k_t):
+    """
+    Finds the rear-wheel damping c_s required to achieve a target sprung-mass 
+    modal damping ratio in a 2-DOF quarter-car model.
+
+    This function finds the best suspension damping c_s such that 
+    sprung mass mode of the 2DOF system is equivalent to the target 
+    modal damping ratio zeta_target.
+    
+    The model uses state-space analysis, eigenvalue decomposition, and a Secant 
+    method root-finder to match the desired modal damping.
+    
+    The unsprung mass mode is ignored as only the eigenvector
+    with the highest participation from the sprung mass is used.
+    The solution is obtained using a Secant method root-finder with added
+    clamped step sizes to prevent divergence.
+
+    Parameters:
+    k_opt: float
+    The optimal spring stiffness value already found [N/m]
+    zeta_target : float
+    Target modal damping ratio of the sprung-mass mode [Hz].
+    M : ndarray(2X2)
+    The Mass Matrix of the quarter car system
+    k_t : float
+    Tire stiffness [N/m].
+
+    Returns:
+    c_s_opt : float
+    The suspension damping [N/m] that matches the modal damping ratio
+    for the sprung-mass mode.
+
+    Notes
+    """
     def rf_func2(k_s, c_s):
+        """
+        Residual function used to calculate the modal damping of the 
+        sprung-mass mode for a given suspension damping c_s.
+
+        The function constructs the state-space matrix:
+          A = [[ 0      I ],
+                 [-M⁻¹K  -M⁻¹C]].
+        in order to convert the second-order differential equations into first-order differential
+        
+        Eigenvalues of A gives the system’s modal decay rates and 
+        damped natural frequencies: λ = σ ± j ω_d
+
+        The sprung-mass mode is identified as the eigenvector with the largest 
+        participation in the sprung-mass displacement DOF (index 0).  
+        
+        The sprung-mass modal damping ratio is calculated: δ = -σ / sqrt(σ² + ω_d²)
+        The returned residual is: residual = δ_actual − δ_target to be used
+        by the Secant Method.
+        Where the root found = correct damping c_s.
+
+        Parameters:
+        k_s : float
+        Suspension stiffness [N/m].
+        c_s : float
+        suspension damping [N·s/m].
+
+        Returns:
+        Modal Damping Ratio 
+        """
+        #Build stiffness Matrix
         K = np.array([[k_s, -k_s],
                       [-k_s, k_s + k_t]])
+        #Build Damping Matrix
         C = np.array([[c_s, -c_s],
                       [-c_s, c_s]])
+        #Compute the inverse of Mass Matrix
         M_inv = np.linalg.inv(M)
         
+        #Build State-Space Matrix
         A = np.block([[np.zeros((2,2)), np.eye(2)],
                       [-M_inv @ K, -M_inv @ C]])
-        eigvals, eigvecs = np.linalg.eig(A)
-        n_sprung = 1
         
+        #Solve eignevalue problem λv=Av
+        eigvals, eigvecs = np.linalg.eig(A)
+        
+        #Calculate Mode Participation
+        n_sprung = 1    
         participations = []
         for i in range(eigvecs.shape[1]):
             # Only consider the position entries for sprung mass
             P = np.sum(np.abs(eigvecs[0:n_sprung, i]))
             participations.append(P)
         
-        # --- Step 2: pick mode with largest sprung mass participation ---
+        #Pick mode with largest sprung mass participation ---
         if len(participations) == 0:
             # Fallback if no modes found
             return 0.0
         mode_index = np.argmax(participations)
         lam_mode = eigvals[mode_index]
         
-        # --- Step 3: compute modal damping ---
+        #Find Decay rate and natural frequency
         sigma = np.real(lam_mode)
         omega_d = np.imag(lam_mode)
         
@@ -145,31 +321,43 @@ def c_finder(k_opt, delta_target, M, k_t):
         if np.isclose(sigma**2 + omega_d**2, 0.0):
             delta = 0.0
         else:
-            delta = -sigma / np.sqrt(sigma**2 + omega_d**2)
-        return delta
+            #Compute modal damping ratio
+            zeta = -sigma / np.sqrt(sigma**2 + omega_d**2)
+        return zeta
 
     def objective_func(c_s):
-        return rf_func2(k_s_opt, c_s)- delta_target
-        
+        """Residual for Secant method: (actual damping − target damping)."""
+        return rf_func2(k_s_opt, c_s)- zeta_target
+    
 
-    c_lower, c_upper = 500, 1500
+    """
+    Secant Method Implementation
+    """
+    #Initial Bounds based on reasonable values for a motorcycle spring
+    c_lower, c_upper = 500, 1500 
 
-
+    #Initial Guess inputed
     c_last, c_curr = c_lower, c_upper
+    #Computed residuals for intial guess
     F_last, F_curr = objective_func(c_last), objective_func(c_curr)
 
-    max_step=500
+    max_step=500 # Clamped step size to prevent divergence
+    
+    #Secant Loop
     for i in range(50):
-        if abs(F_curr) < 1e-4:  # Tolerance on damping ratio
-           # print(f"✓ found c in {i+1} iterations")
-            break
         
+        #Check convergence
+    #(converges if damping ratio error is small enough)
+        if abs(F_curr) < 1e-4:  # Tolerance on damping ratio
+            break
+        #Safe-Guard- prevent division by 0
         safe_gd = F_curr - F_last
         if abs(safe_gd) < 1e-12:
             safe_gd = np.sign(safe_gd) * 1e-12
-        
+        #Secant Updates by approximating derivative 
         c_new = c_curr - F_curr * (c_curr - c_last) / safe_gd
         step = c_new - c_curr
+        #Clamp step size to avoid divergence
         if abs(step) > max_step:
             step = np.sign(step) * max_step
         c_new = c_curr + step
@@ -179,14 +367,85 @@ def c_finder(k_opt, delta_target, M, k_t):
             print("Warning: secant produced invalid c_s, stopping iteration")
             break
         
-        
+        #Shift Values
         c_last, F_last = c_curr, F_curr
         c_curr, F_curr = c_new, objective_func(c_new)
-
+    #Set final result to c_s_opt
     c_s_opt = c_curr
     return c_s_opt
 
 def road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t, plot=False):
+    """
+    Simulates the response of a quarter-car over different road profiles
+    using k_s_opt and c_s_opt the optimized suspension parameters 
+    and evaluates ride comfort using ISO 2631 weighting.
+
+    For each road profile the following steps are performed:
+    1. Loads GPS-derived road altitude data.
+    2. Converts latitude/longitude to metric distance and constructs a smooth,
+       time-parametrized road elevation input using spline interpolation.
+    3. Simulates the quarter-car dynamics with a time-varying damper
+       c(t) = c_s_opt * (1 + 0.1*sin(2πt)) using solve_ivp.
+    4. Computes sprung-mass acceleration from the ODE.
+    5. Optionally: applies the *time-domain ISO Wk digital filter* for plotting.
+       (This is NOT used for optimization.)
+    6. Computes the *true comfort metric* using the ISO 2631
+       octave-band PSD weighting method. As set out in British Standards
+       ISO 2631
+    7. Returns the ISO-weighted RMS acceleration for each road.
+
+    Parameters:
+    k_s_opt : float
+    Optimized suspension stiffness (N/m).
+    c_s_opt : float
+    Optimized damping coefficient (N·s/m), before time-variation.
+    roads : list of dict
+        Each dictionary describes a road and must contain:
+            {
+                "name": str,             # Road label
+                "file": str,             # Excel file containing GPS/altitude
+                "velocity_mph": float,   # Constant Vehicle speed in mph for 
+                "spline_s": float        # Smoothing factor for spline
+            }
+    m_s : float
+    Sprung mass acting on the rear wheel (kg).
+    m_u : float
+    Unsprung mass acting on the rear wheel (kg).
+    k_t : float
+    Tire stiffness (N/m).
+    plot : bool, optional
+        If True:
+            - Plots trimmed road profile 
+            - Plots weighted and unweighted acceleration for instantaneous time histories
+            - Computes the time-domain ISO Wk filtering for visualization only.
+        Default is False.
+
+    Returns:
+    results : list of dict
+        A list containing one dictionary per road, with the fields:
+            {
+                "road": str,
+                "velocity_mph": float,
+                "weighted_rms": float,   # ISO-weighted RMS using PSD method
+                "comfort_metric": float, # Alias of weighted_rms
+                "a_weighted_time": array,# Only if plot=True (ISO filtered)
+            }
+
+        - ``weighted_rms`` is the objective used for optimization.
+        - Time-domain filtering is NOT used in optimization yet if useful for
+        visualisation
+
+    Notes
+    The official comfort metric follows ISO 2631 frequency weighting by:
+        - computing the PSD of sprung-mass acceleration via Welch,
+        - grouping into 1/3-octave bands around ISO reference frequencies,
+        - applying ISO weighting factors laid out in BSISO 2631,
+        - energy-combining to obtain weighted RMS.
+
+    The damper is modeled with a 10% sinusoidal variation to represent
+    environmental and thermal effects: c(t) = c_s_opt * (1 + 0.1 sin(2πt)).
+
+    """
     results=[]
     for road in roads:
         # === Cobbled Road Royal Mile ===
@@ -235,9 +494,35 @@ def road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t, plot=False):
         x_r_dot_func = interpolate.splev(x_lin, f_lin, der=1)
 
         def x_r(t):
+            """
+            Returns the road displacement at time t based on the smoothed,
+            spline-interpolated road profile.
+
+            Parameters
+            t : float or array_like
+            Time(s) at which the road elevation is evaluated.
+
+             Returns
+            float or ndarray
+            Road input displacement x_r(t) in meters.
+            """
             return x_r_func(t)
 
         def x_r_dot(t):
+            """
+            Returns the road vertical velocity
+            by computing the derivative of the interpolated
+            altitude signal
+            
+
+            Parameters:
+            t : float or array_like
+            Time(s) at which the road velocity is wanted
+
+            Returns:
+            float or ndarray
+            Road vertical velocity in meters/s.
+            """
             return float(np.interp(t, x_lin, x_r_dot_func))
 
         t_span = (0, x_lin.max())
@@ -247,6 +532,20 @@ def road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t, plot=False):
         f = 1 #Hz frequency of variation of damping, allows for change every second
         
         def c(t):
+            """
+            Time-Varying damper model to simulate
+            thermal and environmental effects of a real
+            world system.
+            Where alpha and f are chosen above.
+            Parameters:
+            t : float or array_like
+            Time(s) at which damping coefficient
+            is evaluated
+
+            Returns:
+            float or ndarray
+            Instantaneous damping coefficient in Ns/m
+            """
             return c_s_opt * (1 + alpha * np.sin(2 * np.pi * f * t))
 
         def eom(t, y):
@@ -333,21 +632,59 @@ def road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t, plot=False):
             print(f"Weighted RMS (from {t_start}s onwards) = {a_rms_weighted:.3f} m/s² ")
             
         def iso_weighting(x_s_ddot, fs, f_intervals, iso_weights):
+            """
+            Computes the BSISO 2631 weighted RMS acceleration using the
+            1/3-octave-band Power Spectral Density (PSD) and applying offical weightings
+
+           This is the comfort metric used for optimization.
+
+           Steps:
+           1. Compute PSD using Welch.
+           2. Integrate PSD within each 1/3-octave band centered at f_intervals.
+           3. Apply official ISO 2631 weighting factors (iso_weights).
+           4. Energy-combine the weighted RMS values.
+
+           Parameters:
+           x_s_ddot : ndarray
+           Sprung-mass acceleration time series (m/s²).
+           fs : float
+           Sampling frequency (Hz).
+           f_intervals : ndarray
+           ISO reference center frequencies for 1/3-octave bands (Hz).
+           iso_weights : ndarray
+           ISO weighting values x1000
+
+           Returns:
+           weighted_overall_rms : float
+           ISO 2631 weighted RMS acceleration (m/s²).  
+           This is the comfort metric used in the suspension optimization.
+           """      
+           #compute psd for x_s_ddot at frequency bins 
             f, psd= welch(x_s_ddot, fs=fs)
+            #Compute Spacing between frequencies(Frequency resolution)
             df=f[1]-f[0]
             unweighted_rms=[]
+            #Loop for each 1/3 octave center frequency
             for fi in f_intervals:
-                f1=fi/2**(1/6)
-                f2=fi*(2**(1/6))
+                #Compute edges of 1/3 octave band
+                f1=fi/2**(1/6)#Lower edge
+                f2=fi*(2**(1/6))#Upper edge
+                #Find indices of frequency bins in this 1/3 octave band
                 idx = np.where((f >= f1) & (f <= f2))[0]
+                #Compute rms acceleration
                 rms = np.sqrt(np.sum(psd[idx]) * df)
                 unweighted_rms.append(rms)
+            #Convert list to a numpy array    
             unweighted_rms=np.array(unweighted_rms)
-           
+            
+            #Convert milli weights to proper scale
             W= iso_weights/1000
+            #Compute weighted rms as per  BSISO 2631
             weighted_overall_rms = np.sqrt(np.sum((W * unweighted_rms)**2))
            
             return weighted_overall_rms
+        
+        #Official BSISO 2631 intervals and equivalent weightings
         f_intervals=np.array([0.1, 0.125, 0.16, 0.2, 0.25,
         0.315, 0.4, 0.5, 0.63, 0.8, 1, 1.25, 1.6, 2, 2.5, 3.15, 4, 5, 6.3, 8, 10,
         12.5, 16, 20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400])
@@ -359,11 +696,9 @@ def road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t, plot=False):
        
         rms_iso=iso_weighting(x_s_ddot, fs, f_intervals,iso_weights)
 
-# Primary comfort objective is still the ISO-weighted RMS acceleration
-# (Optionally normalize by rms_ref so values are order-of-one)
         
       
-
+        #store roads results
         entry={
             "road": road["name"],
             "velocity_mph": road["velocity_mph"],
@@ -379,22 +714,37 @@ def road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t, plot=False):
     # Return list of results for all roads
     return results
 
-    
-f_targets = np.array([1.0,1.1,1.2,1.3,1.5,1.6,1.8,2., 2.2,2.5])        # Hz
-delta_target = 0.25  # damping ratios
+"""
+Optimization loop over reasonable range of target sprung-mass frequencies
+(f_targets)  
+
+For each target frequency:
+- Compute optimal suspension stiffness (k_s_opt) using k_finder().
+- Compute optimal damping coefficient (c_s_opt) using c_finder().
+- Evaluate model performance across multiple roads using road_analysis().
+- Store results including ISO-weighted RMS acceleration and all road metrics.
+"""
+#Range of target frequencies    
+f_targets = np.array([1.0,1.1,1.2,1.3,1.5,1.6,1.8,2., 2.2,2.5]) 
+zeta_target = 0.25  # damping ratio
 results=[]
+#Loop for each target frequency
 for f_t in f_targets: 
-    print(f"\nRunning for f_target={f_t:.2f} Hz, ζ_target={delta_target:.2f}")
-    m_s = 113.54 #kg mass acting on the rear of the bike (61.5%)
+    print(f"\nRunning for f_target={f_t:.2f} Hz, ζ_target={zeta_target:.2f}")
+    #define parameters to be used for analysis
+    m_s = 114.54 #kg mass acting on the rear of the bike (61.5%)
     m_u = 15 #kg mass of rear wheel and tyre 
     k_t = 100000 #N/m rear tyre stiffness
+    #Build Mass Matrix for 2DOF system
     M = np.array([[m_s, 0], 
                   [0, m_u]])
 
-
+    #Find optimal suspension stiffness 
     k_s_opt = k_finder(f_t, m_s, m_u, k_t)
-    c_s_opt = c_finder(k_s_opt, delta_target, M, k_t)
-        
+    #Find optimal damping coefficient
+    c_s_opt = c_finder(k_s_opt, zeta_target, M, k_t)
+     
+    #Define roads to evaluate model over
     roads = [
         {"file": os.path.join(base_dir, "Cobbled Road Royal Mile.xlsx"), "name": "Cobbled Road Royal Mile", "velocity_mph": 20, "spline_s": 0.4},
         {"file": os.path.join(base_dir, "Liberton Road (A Road).xlsx"), "name": "Liberton Road (A Road)", "velocity_mph": 30, "spline_s": 0.4},
@@ -407,17 +757,19 @@ for f_t in f_targets:
         
         # running road simulations to evaluate weighted rms accleration
     road_metrics = road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t)
+    #Compute the average comfort metric across every road defined
     avg_comfort =np.mean ([r["comfort_metric"] for r in road_metrics])
-        
+    # Store results for the particular target frequency    
     results.append({
-        "f_target": f_t,
-        "zeta_target": delta_target,
-        "k_s_opt": k_s_opt,
-        "c_s_opt": c_s_opt,
-        "mean_comfort_metric": avg_comfort,
+        "f_target": f_t,                   # target sprung-mass frequency
+        "zeta_target": zeta_target,        #Target damping ratio
+        "k_s_opt": k_s_opt,                #Optimal spring stiffness
+        "c_s_opt": c_s_opt,                # Optimal damping coefficient
+        "mean_comfort_metric": avg_comfort,# Average weighted RMS across roads
         "road_metrics": road_metrics
         })
-        
+  
+#Results converted to dataframe for analysis and plotting      
 df_results = pd.DataFrame(results)
 
 heatmap_data = df_results.pivot(index="zeta_target", columns="f_target", values="mean_comfort_metric")
@@ -495,3 +847,6 @@ plt.show()
 
 print("\nAll designs sorted by comfort (ascending comfort metric):")
 print(df_results.sort_values("mean_comfort_metric").reset_index(drop=True)) 
+
+
+    
