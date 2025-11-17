@@ -1,3 +1,4 @@
+
 import numpy as np
 from scipy.linalg import eigh
 import os
@@ -464,7 +465,7 @@ def road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t, plot=False):
         Latitude = np.array(Latitude) * conversion
         Longitude = np.array(Longitude) * conversion
 
-        # Using pythagoras' theorem find the distance between the points
+        # Compute squared differences correctly
         Lat_diffs = np.diff(Latitude)
         Long_diffs = np.diff(Longitude)
         D2 = Lat_diffs**2 + Long_diffs**2
@@ -480,7 +481,9 @@ def road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t, plot=False):
         x_lin = np.linspace(Ttotal[0], Ttotal[-1], 700)
 
         # Interpolation (set small smoothing for realistic curve)
+       # Interpolation (set small smoothing for realistic curve)
         smoothing_factor = road["spline_s"]
+        #print(f"Using smoothing factor s={smoothing_factor}")
         f_lin = interpolate.splrep(Ttotal, Altitude, s=smoothing_factor)
        
         Altitude_smooth = interpolate.splev(x_lin, f_lin, der=0)
@@ -601,7 +604,7 @@ def road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t, plot=False):
             plt.figure(figsize=(8,4))
             plt.scatter(Ttotal, Altitude - Altitude[0], s=10, color="red", label="Original Data")
             plt.plot(x_lin, Altitude_smooth, color="blue", label=f"Interpolated Data (Smoothing Factor={smoothing_factor})")
-            plt.title(f"{road['name']} – Road Profile")
+            plt.title(f"{road['name']}")
             plt.xlabel("Time [s]"); plt.ylabel("Relative Displacement [m]")
             plt.grid(True, ls="--", alpha=0.6); plt.legend()
             # Set the x-axis to start at t_start
@@ -623,7 +626,7 @@ def road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t, plot=False):
             plt.axhline(-1.0, color='r', ls='--')
             
             plt.xlabel("Time [s]"); plt.ylabel("Acceleration [m/s²]")
-            plt.title(f"Sprung-Mass Acceleration – {road['name']}")
+            plt.title(f"Sprung-Mass Acceleration – {road['name']} (Trimmed from {t_start}s)")
             plt.legend(); plt.grid(True); plt.tight_layout(); plt.show()
 
             print(f"=== {road['name']} ===")
@@ -778,12 +781,12 @@ heatmap_data = df_results.pivot(index="zeta_target", columns="f_target", values=
 plt.figure(figsize=(8,6))
 # Use imshow
 plt.imshow(heatmap_data, origin='lower', aspect='auto', cmap='viridis')
-plt.colorbar(label='Mean Comfort Metric ')
+plt.colorbar(label='Weighted RMS Acceleration m/s^2')
 plt.xticks(ticks=np.arange(len(heatmap_data.columns)), labels=np.round(heatmap_data.columns, 2))
 plt.yticks(ticks=np.arange(len(heatmap_data.index)), labels=np.round(heatmap_data.index, 2))
 plt.xlabel("Target Frequency f [Hz]")
 plt.ylabel("Target Damping ζ")
-plt.title("Design Sweep Heatmap:Comfort Metric")
+plt.title("Design Sweep Heatmap:Comfort")
 plt.show()
 
 #%%
@@ -856,6 +859,3 @@ file_path = os.path.join(os.getcwd(), 'results.xlsx')
 
 #print(f"File saved at: {file_path}")
 print(summary.reset_index(drop=True))
-
-
-    
