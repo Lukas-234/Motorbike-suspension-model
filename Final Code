@@ -733,7 +733,7 @@ results=[]
 for f_t in f_targets: 
     print(f"\nRunning for f_target={f_t:.2f} Hz")
     #define parameters to be used for analysis
-    m_s = 114.54 #kg mass acting on the rear of the bike (61.5%)
+    m_s = 114.436125 #kg mass acting on the rear of the bike (61.5%)
     m_u = 15 #kg mass of rear wheel and tyre 
     k_t = 100000 #N/m rear tyre stiffness
     #Build Mass Matrix for 2DOF system
