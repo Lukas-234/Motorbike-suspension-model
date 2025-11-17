@@ -601,9 +601,9 @@ def road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t, plot=False):
             
             # --- Road Profile Plot (Trimmed) ---
             plt.figure(figsize=(8,4))
-            plt.scatter(Ttotal, Altitude - Altitude[0], s=10, color="red", label="Original")
-            plt.plot(x_lin, Altitude_smooth, color="blue", label=f"Spline (s={smoothing_factor})")
-            plt.title(f"{road['name']} – Road Profile (Trimmed from {t_start}s)")
+            plt.scatter(Ttotal, Altitude - Altitude[0], s=10, color="red", label="Original Data")
+            plt.plot(x_lin, Altitude_smooth, color="blue", label=f"Interpolated Data (Smoothing Factor={smoothing_factor})")
+            plt.title(f"{road['name']} – Road Profile")
             plt.xlabel("Time [s]"); plt.ylabel("Relative Displacement [m]")
             plt.grid(True, ls="--", alpha=0.6); plt.legend()
             # Set the x-axis to start at t_start
@@ -625,7 +625,7 @@ def road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t, plot=False):
             plt.axhline(-1.0, color='r', ls='--')
             
             plt.xlabel("Time [s]"); plt.ylabel("Acceleration [m/s²]")
-            plt.title(f"Sprung-Mass Acceleration – {road['name']} (Trimmed from {t_start}s)")
+            plt.title(f"Sprung-Mass Acceleration – {road['name']}")
             plt.legend(); plt.grid(True); plt.tight_layout(); plt.show()
 
             print(f"=== {road['name']} ===")
