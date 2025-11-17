@@ -16,7 +16,7 @@ To change parameters scroll to the relevant secrtion of the code(line..) and cha
 
 ## How to obtain new road data:
 1. Open google earth pro
-2. Using the path tool on google earth create a path over a chosen road
+2. Using the path tool on google earth create a path over a chosen road (to increase accuracy have as many points as possible on the road)
 3. Save that path file as a kmz file
 4. Go to this website:  https://www.gpsvisualizer.com/elevation
 5. With the website above, save the lattitude, longitude, and altitude data as a text file
