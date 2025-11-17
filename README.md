@@ -23,3 +23,12 @@ To change parameters scroll to the relevant secrtion of the code(line..) and cha
 
 ##criteria##
 
+## Where to find all numerical methods
+Interpolation:
+449-492
+
+Root Finding:
+4-436
+
+ODEs:
+493-869
