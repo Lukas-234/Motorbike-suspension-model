@@ -17,3 +17,15 @@ To change parameters scroll to the relevant secrtion of the code(line..) and cha
 4. Go to this website:  https://www.gpsvisualizer.com/elevation
 5. With the website above, save the lattitude, longitude, and altitude data as a text file
 6. Open that text file in excel and save it as a .xlsx file
+
+##criteria##
+AREADME(ortext-type)fileexplaining: (i)Whateachfiledoes,(ii)Howtorun
+ thecode, (iii)Wherethethreerequirednumericalmethodsareimplemented. 35
+ProjectCode
+ •Usefunctionsforclarityandmodularity.
+ •Addcommentsanddocstringstoexplainwhateachpartdoes,particularlyfor
+ important functions.
+ •Useclearvariablenamesandavoidhard-codingvalues.
+ •Keepeverythinginacleanandlogicalfilestructure.
+ • Ifyourcodeisdifficulttofollowor failstodemonstratetherequiredmethods, it
+ will impactyourgrade—evenifyourreport isstrong
