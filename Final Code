@@ -464,7 +464,7 @@ def road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t, plot=False):
         Latitude = np.array(Latitude) * conversion
         Longitude = np.array(Longitude) * conversion
 
-        # Compute squared differences correctly
+        # Using pythagoras' theorem find the distance between the points
         Lat_diffs = np.diff(Latitude)
         Long_diffs = np.diff(Longitude)
         D2 = Lat_diffs**2 + Long_diffs**2
@@ -480,9 +480,7 @@ def road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t, plot=False):
         x_lin = np.linspace(Ttotal[0], Ttotal[-1], 700)
 
         # Interpolation (set small smoothing for realistic curve)
-       # Interpolation (set small smoothing for realistic curve)
         smoothing_factor = road["spline_s"]
-        #print(f"Using smoothing factor s={smoothing_factor}")
         f_lin = interpolate.splrep(Ttotal, Altitude, s=smoothing_factor)
        
         Altitude_smooth = interpolate.splev(x_lin, f_lin, der=0)
