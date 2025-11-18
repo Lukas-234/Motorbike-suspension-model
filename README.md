@@ -4,6 +4,11 @@ the code, (iii) Where the three required numerical methods are implemented
 # Motorbike-suspension-model
 This is our group project on modelling the suspension system on a motorbike. With the aim of finding a spring coeffcient and damping coefficient that minimises vertical rider acceleration.
 
+## What does each file do:
+The final code is the final code
+The folder with the title: "Road Data" includes all the data that was used in the final code
+All other folders are initial drafts of the code, sorted by the numerical method used
+
 ## Simulation of Code
 Download the neccessary xlsx files, and input them into the relevant folder which is being used to run the code. Then simply run the code
 
