@@ -23,7 +23,7 @@ To change parameters scroll to the relevant secrtion of the code(line..) and cha
 
 ##criteria##
 
-## Where to find all numerical methods
+## Where to find all numerical methods in the code
 Interpolation:
 449-492
 
