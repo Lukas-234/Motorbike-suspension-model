@@ -1,6 +1,3 @@
-## Need to include
-A README (or text-type) file explaining: (i) What each file does, (ii) How to run
-the code, (iii) Where the three required numerical methods are implemented
 # Motorbike-suspension-model
 This is our group project on modelling the suspension system on a motorbike. With the aim of finding a spring coeffcient and damping coefficient that minimises vertical rider acceleration.
 
