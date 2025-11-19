@@ -44,6 +44,11 @@ def build_iso_wk(fs):
     w1, w2, w3, w4, w5, w6 = [2*np.pi*f for f in [f1, f2, f3, f4, f5, f6]]
     sections = []
 
+    #Warning ignored: occurs as a result of filter
+    #filter rms values not used in final optmization; for plotting only
+    #rms values are calculated using PSD, in function line 652
+    # called iso_weightings()
+    warnings.filterwarnings("ignore", category=BadCoefficients)
     # High-pass Hh
     num = [1.0, 0.0, 0.0]
     den = [1.0, w1/Q1, w1**2]
@@ -784,7 +789,6 @@ for f_t in f_targets:
   
 #Results converted to dataframe for analysis and plotting      
 df_results = pd.DataFrame(results)
-df_results.to_csv(os.path.join(base_dir, "simulation_results.csv"), index=False)
 print("Simulation completed and results saved.")
 
 heatmap_data = df_results.pivot(index="zeta_target", columns="f_target", values="mean_comfort_metric")
