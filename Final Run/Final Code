@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from scipy import interpolate
 from scipy.integrate import solve_ivp
-from scipy.signal import cont2discrete, welch, sosfiltfilt, tf2sos
+from scipy.signal import cont2discrete, welch, sosfiltfilt, tf2sos, BadCoefficients
+import warnings
 
 # ISO 2631 Wk filter (Rimell et al., 2007)
 def build_iso_wk(fs):
@@ -599,6 +600,11 @@ def road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t, plot=False):
             sections = build_iso_wk(fs)
             a_weighted = x_s_ddot_plot.copy()
             for b, a in sections:
+                #Warning ignored: occurs as a result of filter
+                #filter rms values not used in final optmization
+                #rms values are calculated using PSD, in function below
+                # called iso_weightings()
+                warnings.filterwarnings("ignore", category=BadCoefficients)
                 sos = tf2sos(b, a)
                 a_weighted = sosfiltfilt(sos, a_weighted)
             idx_start = np.searchsorted(sol.t, t_start)
