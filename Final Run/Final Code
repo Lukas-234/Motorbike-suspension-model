@@ -645,7 +645,7 @@ def road_analysis(k_s_opt, c_s_opt, roads, m_s, m_u, k_t, plot=False):
             plt.legend(); plt.grid(True); plt.tight_layout(); plt.show()
 
             print(f"=== {road['name']} ===")
-            print(f"Weighted RMS (from {t_start}s onwards) = {a_rms_weighted:.3f} m/s² ")
+            print(f"Weighted RMS (from {t_start}s onwards) ")
             
         def iso_weighting(x_s_ddot, fs, f_intervals, iso_weights):
             """
