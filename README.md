@@ -9,8 +9,8 @@ This is our group project on modelling the suspension system on a motorbike. Wit
 - The folder with the title: "Road Data" includes all the data that was used in the final code
 - All other folders are initial drafts of the code, sorted by the numerical method used
 
-## Simulation of Code
-Download the neccessary xlsx files, and input them into the relevant folder which is being used to run the code. Then simply run the code
+## How to run the code:
+Download the neccessary xlsx files found in the road data folder, and input them into the relevant folder which is being used to run the code. Then simply run the code
 
 
 ## Changing conditions
@@ -26,7 +26,6 @@ To change parameters scroll to the relevant secrtion of the code(line..) and cha
 5. With the website above, save the lattitude, longitude, and altitude data as a text file
 6. Open that text file in excel and save it as a .xlsx file
 
-##criteria##
 
 ## Where to find all numerical methods in the code
 Interpolation:
