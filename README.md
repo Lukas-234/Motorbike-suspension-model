@@ -4,6 +4,7 @@ This is our group project on modelling the suspension system on a motorbike. Wit
 ## What does each file do:
 - The main file to use will be the "Final Run" folder.
 - The following files: "Data analysis", "ODE Files", "Root finding" all are the draft codes that were used to contribute to the final code.
+- The Final report will be located next to the README
 
 ## How to run the code:
 All files to run the final code will be in the "Final Run" folder. It includes the final code itself as well as all the data to run the code.
