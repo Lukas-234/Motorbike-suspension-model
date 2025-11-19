@@ -2,7 +2,7 @@
 This is our group project on modelling the suspension system on a motorbike. With the aim of finding a spring coeffcient and damping coefficient that minimises vertical rider acceleration.
 
 ## What does each file do:
-- The main file to use will be the "Final Run" folder.
+- The main py file to use will be the "Final Run" folder.
 - The following files: "Data analysis", "ODE Files", "Root finding" all are the draft codes that were used to contribute to the final code. These should not be used.
 - The Final report will be located next to the README
 
@@ -10,8 +10,8 @@ This is our group project on modelling the suspension system on a motorbike. Wit
 All files to run the final code will be in the "Final Run" folder. It includes the final code itself as well as all the data to run the code.
 
 ## Changing conditions
-To add or remove roads, scroll to the relevant section of code (line 762) and remove or add as desired.
-To change parameters scroll to the relevant secrtion of the code(line 747) and change as desired. 
+To add or remove roads, scroll to the relevant section of code (line 766) and remove or add as desired.
+To change parameters scroll to the relevant secrtion of the code(line 751) and change as desired. 
 
 
 ## How to obtain new road data:
@@ -25,10 +25,10 @@ To change parameters scroll to the relevant secrtion of the code(line 747) and c
 
 ## Where to find all numerical methods in the code
 Root Finding:
-4-376
+97-380
 
 Interpolation/ Data analysis:
-450-493
+455-497
 
 ODEs:
-495-573
+499-595
