@@ -10,7 +10,7 @@ This is our group project on modelling the suspension system on a motorbike. Wit
 All files to run the final code will be in the "Final Run" folder. It includes the final code itself as well as all the data to run the code.
 
 ## Changing conditions
-To add or remove roads, scroll to the relevant section of code (line 762) and remove or add as desired
+To add or remove roads, scroll to the relevant section of code (line 762) and remove or add as desired.
 To change parameters scroll to the relevant secrtion of the code(line 747) and change as desired. 
 
 
