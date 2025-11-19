@@ -11,7 +11,7 @@ k_t = 100000    # N/m, tire stiffness
 
 # Design target: place natural frequency above sensitive range
 f_target = 1  # Hz
-delta_target=0.3 #for max comfort industry standard
+delta_target=0.2 #for max comfort industry standard
 
 # Mass matrix
 M = np.array([[m_s + m_d, 0], 
