@@ -733,7 +733,7 @@ For each target frequency:
 #Range of target frequencies    
 f_targets = np.linspace(1, 1.6, num=13)
 
-zeta_target = 0.25  # Target damping ratio
+zeta_target = 0.2  # Target damping ratio
 results=[]
 #Loop for each target frequency
 for f_t in f_targets: 
