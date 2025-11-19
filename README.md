@@ -5,17 +5,15 @@ the code, (iii) Where the three required numerical methods are implemented
 This is our group project on modelling the suspension system on a motorbike. With the aim of finding a spring coeffcient and damping coefficient that minimises vertical rider acceleration.
 
 ## What does each file do:
-- The 'final code' file is the final code that was used to generate the report
-- The folder with the title: "Final Run" includes all the data that was used in the final code as well as the final code file
-- All other folders are initial drafts of the code, sorted by the numerical method used
+- The main file to use will be the "Final Run" folder.
+- The following files: "Data analysis", "ODE Files", "Root finding" all are the draft codes that were used to contribute to the final code.
 
 ## How to run the code:
-Download the neccessary xlsx files found in the final run folder, and input them into the relevant folder which is being used to run the code. Then simply run the code
-
+All files to run the final code will be in the "Final Run" folder. It includes the final code itself as well as all the data to run the code.
 
 ## Changing conditions
-To add or remove roads, scroll to the relevant section of code (line ...) and remove or add as desired
-To change parameters scroll to the relevant secrtion of the code(line..) and change as desired. 
+To add or remove roads, scroll to the relevant section of code (line 762) and remove or add as desired
+To change parameters scroll to the relevant secrtion of the code(line 747) and change as desired. 
 
 
 ## How to obtain new road data:
@@ -28,11 +26,11 @@ To change parameters scroll to the relevant secrtion of the code(line..) and cha
 
 
 ## Where to find all numerical methods in the code
-Interpolation:
-449-492
-
 Root Finding:
-4-436
+4-376
+
+Interpolation/ Data analysis:
+450-493
 
 ODEs:
-493-869
+495-573
